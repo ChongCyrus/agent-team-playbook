@@ -4,3 +4,9 @@ Thumbs.db
 .idea/
 .vscode/
 node_modules/
+
+# 本地凭据（勿提交）
+.secrets/
+
+# 个人工具（仅本地使用）
+/tools/
