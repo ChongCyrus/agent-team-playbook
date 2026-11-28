@@ -22,6 +22,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+// 管道被下游提前关闭（如 | head）时安静退出，不抛未捕获错误
+process.stdout.on('error', (err) => {
+  if (err?.code === 'EPIPE') process.exit(0)
+  throw err
+})
 const SOURCE_ROOT = path.join(PACKAGE_ROOT, 'skills', 'agent-team-playbook')
 
 /** 会被安装进用户项目的条目：playbook 本体，不含 SKILL.md（那是 skill 入口）与同步清单。 */
@@ -45,6 +51,7 @@ function parseArgs(argv) {
     help: false,
     global: false,
     yes: false,
+    inlineCore: false,
   }
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i]
@@ -54,6 +61,7 @@ function parseArgs(argv) {
     else if (a === '--skip-conflicts') opts.skipConflicts = true
     else if (a === '--global' || a === '-g') opts.global = true
     else if (a === '--yes' || a === '-y') opts.yes = true
+    else if (a === '--inline-core') opts.inlineCore = true
     else if (a === '--help' || a === '-h') opts.help = true
     else if (a === 'init') continue
     else {
@@ -74,6 +82,8 @@ ${C.bold('选项')}
   --dir <路径>        目标目录（默认当前目录）
   --global, -g        装成用户全局指令：复制到 $DSH_HOME/agent-team-playbook/，
                       并在 $DSH_HOME/AGENTS.md 追加一个受管区块（不覆盖原有内容）
+  --inline-core       配合 --global：把核心全文内联进区块（每轮真常驻，约 3.3k tokens），
+                      默认只写指针（约 200 tokens，agent 需先读一次文件）
   --yes, -y           非交互确认（--global 追加区块用）
   --dry-run           只显示计划，不写任何文件
   --force, -f         冲突时全部覆盖（不询问）
@@ -149,15 +159,33 @@ function rewriteReferences(text, renames) {
 const BLOCK_START = '<!-- agent-team-playbook:start -->'
 const BLOCK_END = '<!-- agent-team-playbook:end -->'
 
-function managedBlock(destAbs) {
+function managedBlock(destAbs, inlineCore, coreText) {
+  const footer = '> 本节由 `npx dsh-agent-team-playbook init --global` 维护，块内内容会被自动覆盖；块外内容不受影响。'
+
+  if (!inlineCore) {
+    return [
+      BLOCK_START,
+      '## 多智能体协作规程（agent-team-playbook）',
+      '',
+      `本机所有项目按以下规程协作：\`${destAbs}/AGENTS.md\`（常驻核心，先读它）。`,
+      `分册细则在 \`${destAbs}/docs/workflow/\`，按核心 §8 索引按需查阅。`,
+      '',
+      footer,
+      BLOCK_END,
+    ].join('\n')
+  }
+
+  // 内联：核心全文进区块；相对路径改写为绝对路径，保证在任意工作区都能读到
+  const rewritten = coreText
+    .replace(/\(^\)/, '') // 不裁剪开头
+    .replace(/(^|[^/\w.-])AGENTS\.md(?![.\w-])/g, (_m, pre) => `${pre}${destAbs}/AGENTS.md`)
+    .split('docs/').join(`${destAbs}/docs/`)
+
   return [
     BLOCK_START,
-    '## 多智能体协作规程（agent-team-playbook）',
+    rewritten.replace(/\s+$/, ''),
     '',
-    `本机所有项目按以下规程协作：\`${destAbs}/AGENTS.md\`（常驻核心，先读它）。`,
-    `分册细则在 \`${destAbs}/docs/workflow/\`，按核心 §8 索引按需查阅。`,
-    '',
-    '> 本节由 `npx dsh-agent-team-playbook init --global` 维护，块内内容会被自动覆盖；块外内容不受影响。',
+    footer,
     BLOCK_END,
   ].join('\n')
 }
@@ -173,10 +201,12 @@ async function runGlobalMode(opts) {
   const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
   const destDir = path.join(home, 'agent-team-playbook')
   const instrFile = path.join(home, 'AGENTS.md')
-  const block = managedBlock(destDir)
+  const coreText = await readFile(path.join(SOURCE_ROOT, 'AGENTS.md'), 'utf8')
+  const block = managedBlock(destDir, opts.inlineCore, coreText)
 
   const rels = [ROOT_FILE, ...(await walk(ROOT_DIR))]
   console.log(C.bold('全局安装计划'))
+  console.log(C.dim(`  区块模式：${opts.inlineCore ? '内联核心全文（每轮真常驻）' : '指针（默认，agent 需先读一次文件）'}`))
   console.log(`  复制 ${rels.length} 个文件 → ${destDir}`)
   console.log(`  维护受管区块     → ${instrFile}`)
 
