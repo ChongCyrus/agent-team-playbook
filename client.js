@@ -28,6 +28,52 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useMemo, useState } = React
 
     const NAME = 'dsh-agent-team-playbook'
+
+    /**
+     * chip 样式：数值照抄原生的 `.workspace`（HeroShell 的 workspace chip），
+     * 这样和「音乐制作 / 标准模式」在同一行时视觉一致。
+     */
+    const CHIP_CSS = `
+.atp-chip{
+  border-radius: var(--dsw-radius-sm, 8px);
+  max-width: min(100%, 360px);
+  min-height: 28px;
+  color: var(--dsw-alias-label-primary, inherit);
+  cursor: pointer;
+  background: 0 0;
+  border: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  display: inline-flex;
+}
+.atp-chip[aria-expanded="true"]{ background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.14)); }
+@media (hover:hover){ .atp-chip:not(:disabled):hover{ background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.14)); } }
+.atp-chip:disabled{ cursor: default; opacity: .6; }
+.atp-chip .atp-chip-label{ text-overflow: ellipsis; white-space: nowrap; min-width: 0; overflow: hidden; }
+.atp-chip .atp-chip-glyph{ flex: none; color: var(--dsw-alias-label-primary, inherit); }
+/* heroOptions 容器原生是 margin-left:auto（靠右）；把我们那行拉回左对齐，紧跟「标准模式」后面 */
+div:has(> .atp-chip){ margin-left: 0 !important; }
+`
+    const CHIP_STYLE_ID = 'agent-team-playbook/chip.css'
+
+    /** 注入一次样式（幂等）。 */
+    function ensureStyle() {
+      try {
+        if (typeof document === 'undefined') return
+        if (document.querySelector(`style[data-plugin-css="${CHIP_STYLE_ID}"]`) !== null) return
+        const tag = document.createElement('style')
+        tag.setAttribute('data-plugin-css', CHIP_STYLE_ID)
+        tag.textContent = CHIP_CSS
+        document.head.appendChild(tag)
+      } catch {
+        /* 样式注入失败不影响功能 */
+      }
+    }
     const API = '/api/agent-team-playbook/status'
     const Button = primitives?.Button
     const Modal = primitives?.Modal
@@ -96,6 +142,18 @@ window.__ModuleLoader__.load({
     }
 
     /** 解析"当前会话"的 cwd 与 sessionId（客户端 sessions 快照）。 */
+    /** 安全取 remote.commands.execute：声明缺失时返回 undefined 而不是抛错。 */
+    function remoteExecute(ctx, sessionId, line) {
+      try {
+        const remote = ctx?.remote ?? (typeof ctx?.get === 'function' ? ctx.get('remote', false) : undefined)
+        const commands = remote?.commands ?? (typeof ctx?.get === 'function' ? ctx.get('remote.commands', false) : undefined)
+        if (typeof commands?.execute !== 'function') return Promise.resolve({ ok: false, error: { message: '当前 composition 没有远程命令服务，请改用 /atp apply 命令' } })
+        return commands.execute(sessionId, line, [])
+      } catch (error) {
+        return Promise.resolve({ ok: false, error: { message: String(error?.message ?? error) } })
+      }
+    }
+
     function currentSession(ctx) {
       try {
         const rows = ctx?.sessions?.list?.getSnapshot?.()?.byId ?? {}
@@ -119,7 +177,7 @@ window.__ModuleLoader__.load({
         const { sessionId, cwd } = currentSession(ctx)
         const data = await fetchStatus(cwd)
         const found = data?.conflicts ?? []
-        const execute = (sid, line) => ctx?.remote?.commands?.execute?.(sid, line, [])
+        const execute = (sid, line) => remoteExecute(ctx, sid, line)
         if (found.length > 0) {
           writeStore({ open: true, conflicts: found, cwd: cwd ?? '', sessionId: sessionId ?? '', execute, afterApply: onDone })
           return { started: true, conflicts: found.length }
@@ -289,10 +347,17 @@ window.__ModuleLoader__.load({
       }
 
       const label = busy ? '协作规程…' : `协作规程${badge}`
-      if (typeof Button === 'function') {
-        return h(Button, { variant: 'outline', disabled: busy, onClick: () => void onClick() }, label)
-      }
-      return h('button', { type: 'button', disabled: busy, onClick: () => void onClick() }, label)
+      const Icon = primitives?.IconChecklistOutlineRegular
+      // 结构照抄原生 chip：button + 16px 图标 + 文本（无边框、透明底、hover 才出底色）
+      return h('button', {
+        type: 'button',
+        className: 'atp-chip',
+        disabled: busy,
+        'aria-label': '多智能体协作规程',
+        onClick: () => void onClick(),
+      },
+      Icon !== undefined ? h(Icon, { className: 'atp-chip-glyph', size: 16 }) : null,
+      h('span', { className: 'atp-chip-label' }, label))
     }
 
     function Panel() {
@@ -324,7 +389,7 @@ window.__ModuleLoader__.load({
         autoOpened = fingerprint
         const ctx = Panel.ctx
         const { sessionId, cwd } = currentSession(ctx)
-        const execute = async (sid, line) => ctx?.remote?.commands?.execute?.(sid, line, [])
+        const execute = async (sid, line) => remoteExecute(ctx, sid, line)
         writeStore({ open: true, conflicts: found, cwd: cwd ?? '', sessionId: sessionId ?? '', execute, afterApply: refresh })
       }, [state, refresh])
 
@@ -378,7 +443,7 @@ window.__ModuleLoader__.load({
                     onClick: () => {
                       const ctx = Panel.ctx
                       const { sessionId, cwd } = currentSession(ctx)
-                      const execute = async (sid, line) => ctx?.remote?.commands?.execute?.(sid, line, [])
+                      const execute = async (sid, line) => remoteExecute(ctx, sid, line)
                       writeStore({ open: true, conflicts, cwd: cwd ?? '', sessionId: sessionId ?? '', execute, afterApply: refresh })
                     },
                   }, '逐项处理冲突…')
@@ -419,6 +484,7 @@ window.__ModuleLoader__.load({
     }
 
     function apply(ctx) {
+      ensureStyle()
       Panel.ctx = ctx
       ctx.slots.inject('settings.section', () => ctx.slots.register({
         name: 'settings.section',
@@ -444,7 +510,7 @@ window.__ModuleLoader__.load({
     }
 
     exports.apply = apply
-    exports.inject = ['slots', 'sessions', 'remote.commands']
+    exports.inject = ['slots', 'sessions', 'remote', 'remote.commands']
     exports.name = NAME
     // 测试缝：拼命令是纯函数，单独可测
     exports.__test = { buildApplySpec, detectThenInstall, ResolveDialog, ChoiceRow, readStore }
