@@ -116,9 +116,26 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
       )
     }
 
-    function LinkButton({ onClick, children }) {
-      if (typeof Button === 'function') return h(Button, { onClick, variant: 'secondary' }, children)
-      return h('button', { type: 'button', onClick }, children)
+    /** 文字链式按钮（无边框），hover 出淡底；primary 用主色加粗。 */
+    function LinkButton({ onClick, children, primary = false }) {
+      const [hover, setHover] = React.useState(false)
+      return h('button', {
+        type: 'button',
+        style: {
+          border: 0,
+          borderRadius: 6,
+          background: hover ? 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.18))' : 'none',
+          color: primary ? 'var(--dsw-alias-label-primary, inherit)' : 'var(--dsw-alias-label-secondary, #98a2b3)',
+          font: 'inherit',
+          fontSize: 13,
+          fontWeight: primary ? 600 : 400,
+          padding: '4px 8px',
+          cursor: 'pointer',
+        },
+        onMouseEnter: () => setHover(true),
+        onMouseLeave: () => setHover(false),
+        onClick,
+      }, children)
     }
 
     /** 解析"当前会话"的 cwd 与 sessionId（客户端 sessions 快照）。 */
@@ -177,10 +194,13 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
       const [renaming, setRenaming] = React.useState(false)
       const [name, setName] = React.useState('')
 
+      const [hoverKey, setHoverKey] = React.useState('')
       const pill = (text, onClick, key) => h('button', {
         key,
         type: 'button',
-        style: S.pill,
+        style: { ...S.pill, ...(hoverKey === key ? S.pillHover : null) },
+        onMouseEnter: () => setHoverKey(key),
+        onMouseLeave: () => setHoverKey(''),
         onClick,
       }, text)
 
@@ -207,7 +227,9 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
           shortName(conflict.rel)),
         h('div', { style: S.actions },
           pill('覆盖', () => onDecide(index, 'overwrite'), 'ow'),
+          h('span', { key: 's1', style: S.sep }, '·'),
           pill('备份', () => onDecide(index, 'backup'), 'bk'),
+          h('span', { key: 's2', style: S.sep }, '·'),
           pill('改名', () => setRenaming(true), 'rn')))
     }
 
@@ -290,8 +312,8 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
       const body = [
         h('div', { key: 'bar', style: S.toolbar },
           h('span', { style: S.muted }, `还剩 ${remaining} 项`),
-          h('button', { type: 'button', style: S.pill, onClick: () => decideAll('overwrite') }, '全部覆盖'),
-          h('button', { type: 'button', style: S.pill, onClick: () => decideAll('backup') }, '全部备份')),
+          h('button', { type: 'button', style: { ...S.pill, color: 'var(--dsw-alias-label-primary, inherit)' }, onClick: () => decideAll('overwrite') }, '全部覆盖'),
+          h('button', { type: 'button', style: { ...S.pill, color: 'var(--dsw-alias-label-primary, inherit)' }, onClick: () => decideAll('backup') }, '全部备份')),
         h('div', { key: 'list', style: S.dialogBody },
           rows.length > 0 ? rows : h('div', { style: S.muted }, '已全部决定，正在执行…')),
         error ? h('div', { key: 'err', style: { color: 'var(--dsw-alias-label-danger, #e06c5a)', marginTop: 8, fontSize: 12 } }, error) : null,
@@ -338,11 +360,14 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
       },
       fileName: { flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13 },
       actions: { flex: 'none', display: 'flex', gap: 4 },
+      // 极简文字操作：默认只是灰色小字，悬停才出淡底（无边框、无灰块）
       pill: {
-        minHeight: 24, padding: '0 8px', borderRadius: 'var(--dsw-radius-sm, 8px)',
-        border: '1px solid rgba(127,127,127,.32)', background: 'none', color: 'inherit',
-        font: 'inherit', fontSize: 12, cursor: 'pointer', lineHeight: '22px', whiteSpace: 'nowrap',
+        minHeight: 22, padding: '0 6px', borderRadius: 6, border: 0, background: 'none',
+        color: 'var(--dsw-alias-label-secondary, #98a2b3)', font: 'inherit', fontSize: 12,
+        cursor: 'pointer', lineHeight: '22px', whiteSpace: 'nowrap',
       },
+      pillHover: { background: 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.18))', color: 'var(--dsw-alias-label-primary, inherit)' },
+      sep: { opacity: 0.28, fontSize: 12, userSelect: 'none' },
       muted: { fontSize: 12, opacity: 0.6 },
     }
 
@@ -569,7 +594,7 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
 
       children.push(
         h('div', { key: 'actions', style: { marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' } },
-          h(LinkButton, { onClick: () => void install() }, '安装到工作区'),
+          h(LinkButton, { onClick: () => void install(), primary: true }, '安装到工作区'),
           h(LinkButton, { onClick: () => void refresh() }, '重新检测'),
           h(LinkButton, { onClick: () => void copy('/atp install') }, copied === '/atp install' ? '已复制 ✓' : '复制 /atp install')),
       )
