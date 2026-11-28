@@ -253,7 +253,7 @@
 
   <rect x="608" y="856" width="592" height="116" rx="14" fill="url(#gCard)" stroke="#dbe4ee"/>
   <text x="626" y="880" font-size="13" font-weight="700" fill="#12243a">「目的实现」七个展开 · 缺一即为半成品</text>
-  <text x="626" y="903" font-size="10.5" font-weight="600" fill="#1f5a8f">合理性　优越性　健壮性　完整性　必要完善与防御性　用户视角　需求补全</text>
+  <text x="626" y="903" font-size="10.5" font-weight="600" fill="#1f5a8f">合理性　优越性　健壮性　完整性　必要的完善与防御性　用户视角　需求补全</text>
   <text x="626" y="924" font-size="9.8" fill="#5b7189">合理性 = 对得住目的本身（没偏离、没过度）＋ 经得起用户真实体验检验（不别扭、不困惑）；</text>
   <text x="626" y="942" font-size="9.8" fill="#5b7189">两视角冲突时以用户真实体验为先；缺的部分主动补全，拿不准就问用户。</text>
   <text x="626" y="960" font-size="9.3" fill="#8a9bad">其余：优越（非凑合）· 健壮（不崩不脏数据）· 完整（含失败路径与回滚）· 完善（幂等/可诊断/可维护）</text>
