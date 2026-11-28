@@ -1,4 +1,4 @@
-# AGENTS.md（常驻核心 · v1.21）
+# AGENTS.md（常驻核心 · v1.22）
 
 > **定位**：团队（Lead + 队友）共享的最高工作约定。本文件是**常驻最小集**；展开细则在 `docs/workflow/rules/`，按下文 §8 索引按需查阅。全文备份：`archive/AGENTS-v1.7-full.md`（拆分前最新全文）、`archive/AGENTS-v1.5-full.md`（更早快照）。
 > **同源关系**：分册是本文件的展开解释，不是另一套规则。**原则与速查以本文件为准；细则细节以分册为准**——摘要与细则不一致时，以细则为真，并立即修正本文件。
@@ -109,7 +109,7 @@ docs/workflow/practices/             # 经验与做法库（按问题类型组�
 | **修复/修 bug 型任务** | 先读 `03-流水线.md`（S0 修复型产出 + **S1 调查**：先找根因再策划） |
 | 建任务板、分配任务 | `docs/workflow/rules/05-任务板.md` |
 | 审计前 | `docs/workflow/rules/03-流水线.md`（S4 + 审计清单）+ `docs/workflow/rules/08-反模式与速查.md` |
-| CI/CD 门禁 与 真机验证（**可并行**） | `docs/workflow/rules/03-流水线.md`（S5：A 门禁 / B 真机，启动看产物、判定是 AND） |
+| CI/CD 门禁 与 真机验证（**可并行，且可与 S4 重叠**） | `docs/workflow/rules/03-流水线.md`（S5：启动看产物、判定是 AND、S4 出口后才下结论） |
 | **P0 事故 / 不可逆操作** | `docs/workflow/rules/03-流水线.md` §3.2 善后 —— 先读再动手 |
 | 组队、Lead/队友职责、沟通、共享资源 | `docs/workflow/rules/06-协作细则.md` |
 | 问用户、对齐验收 | `docs/workflow/rules/07-用户交互与度量.md` |
