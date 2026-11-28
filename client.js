@@ -5,7 +5,12 @@
  * 手写 window.__ModuleLoader__.load({ id, factory })，无构建步骤，
  * require 由 shell 提供（react / primitives / slots …）。
  *
- * 本步只做**只读**面板：
+ * 两步中的第二步：面板 + 冲突处理弹窗。
+ * 弹窗里逐项选择 覆盖 / 备份 / 改名，点"应用"后**通过 official Remote 执行**
+ * `remote.commands.execute(sessionId, '/atp apply …')` —— 与手动输入等价、有审计记录，
+ * 因此不需要任何自定义写文件接口。
+ *
+ * 面板本身仍然只读：
  *   · 显示当前工作区是否已安装、有无同名冲突
  *   · 冲突项可一键复制建议命令（真正的写入仍由用户执行 /atp apply，可见可审计）
  * 不做任何写操作，也不直接调用命令。
@@ -25,6 +30,34 @@ window.__ModuleLoader__.load({
     const NAME = 'dsh-agent-team-playbook'
     const API = '/api/agent-team-playbook/status'
     const Button = primitives?.Button
+    const Modal = primitives?.Modal
+
+    // ── 极简 store：面板与弹窗共享"待处理冲突"状态 ─────────────────────────
+    const store = { state: { open: false, cwd: '', sessionId: '', conflicts: [], busy: false, message: '' }, listeners: new Set() }
+    const readStore = () => store.state
+    const writeStore = (patch) => {
+      store.state = { ...store.state, ...patch }
+      for (const fn of store.listeners) fn()
+    }
+    const subscribeStore = (fn) => {
+      store.listeners.add(fn)
+      return () => store.listeners.delete(fn)
+    }
+    const useStore = () => {
+      const [snap, setSnap] = React.useState(readStore)
+      React.useEffect(() => subscribeStore(() => setSnap(readStore())), [])
+      return snap
+    }
+
+    /** 把逐项选择拼成一条 /atp apply 命令（导出给测试）。 */
+    function buildApplySpec(choices) {
+      const parts = choices.map((c, i) => {
+        if (c.action === 'backup') return `${i + 1}=备份`
+        if (c.action === 'rename') return `${i + 1}=改名:${c.name}`
+        return `${i + 1}=覆盖`
+      })
+      return `/atp apply ${parts.join(' ')}`
+    }
 
     /** 读一次状态；cwd 为空时只验证连通性。 */
     async function fetchStatus(cwd) {
@@ -59,6 +92,144 @@ window.__ModuleLoader__.load({
     function LinkButton({ onClick, children }) {
       if (typeof Button === 'function') return h(Button, { onClick, variant: 'secondary' }, children)
       return h('button', { type: 'button', onClick }, children)
+    }
+
+    /** 解析"当前会话"的 cwd 与 sessionId（客户端 sessions 快照）。 */
+    function currentSession(ctx) {
+      try {
+        const rows = ctx?.sessions?.list?.getSnapshot?.()?.byId ?? {}
+        const entries = Object.entries(rows)
+        const active = entries.find(([, row]) => (row?.retainedBy?.mainView ?? 0) > 0) ?? entries.find(([, row]) => typeof row?.cwd === 'string')
+        if (active === undefined) return {}
+        const [sessionId, row] = active
+        return { sessionId, cwd: typeof row?.cwd === 'string' ? row.cwd : undefined }
+      } catch {
+        return {}
+      }
+    }
+
+    /** 单个冲突的选择行：覆盖 / 备份 / 改名 + 名字输入。 */
+    function ChoiceRow({ index, conflict, choice, onChoose, renameEnabled, onRename }) {
+      const btn = (action, text) => {
+        const active = choice?.action === action
+        const props = { key: action, onClick: () => onChoose(index, action) }
+        if (typeof Button === 'function') return h(Button, { ...props, variant: active ? 'primary' : 'outline' }, text)
+        return h('button', { ...props, type: 'button', style: { fontWeight: active ? 700 : 400 } }, text)
+      }
+      const children = [
+        h('div', { key: 'label', style: { wordBreak: 'break-all', marginBottom: 4 } }, `${index + 1}. ${conflict.rel}`),
+        h('div', { key: 'reason', style: { opacity: 0.6, fontSize: 12, marginBottom: 6 } }, conflict.reason),
+        h('div', { key: 'btns', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+          btn('overwrite', '覆盖'),
+          btn('backup', '备份'),
+          renameEnabled ? btn('rename', '改名…') : null),
+      ]
+      if (choice?.action === 'rename') {
+        children.push(
+          h('div', { key: 'rename', style: { marginTop: 6 } },
+            h('input', {
+              value: choice.name ?? '',
+              placeholder: '新名字（如 team-docs / AGENTS.team.md）',
+              onChange: (e) => onRename(index, e.target.value),
+              style: { width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid rgba(127,127,127,0.4)', background: 'transparent', color: 'inherit' },
+            }),
+            h('div', { style: { opacity: 0.55, fontSize: 12, marginTop: 4 } }, '整份改名：同一类（核心/分册）只需填一次'),
+          ),
+        )
+      }
+      return h('div', { key: `row${index}`, style: { padding: '8px 0', borderTop: index === 0 ? 'none' : '1px solid rgba(127,127,127,0.18)' } }, children)
+    }
+
+    /** 冲突处理弹窗（挂在 shell.overlay 上，关闭时渲染 null）。 */
+    function ResolveDialog() {
+      const state = useStore()
+      const [choices, setChoices] = React.useState([])
+      const [error, setError] = React.useState('')
+
+      React.useEffect(() => {
+        if (!state.open) return
+        setError('')
+        setChoices((state.conflicts ?? []).map(() => ({ action: 'overwrite' })))
+      }, [state.open, state.conflicts])
+
+      if (!state.open) return null
+
+      const isCoreRel = (rel) => rel === 'AGENTS.md'
+      const onChoose = (i, action) => {
+        setChoices((prev) => {
+          const next = [...prev]
+          next[i] = { ...(next[i] ?? {}), action }
+          return next
+        })
+      }
+      const onRename = (i, name) => {
+        setChoices((prev) => {
+          const next = [...prev]
+          next[i] = { ...(next[i] ?? {}), action: 'rename', name }
+          // 同一单元（核心/分册）共享同一个改名值
+          const unit = isCoreRel((state.conflicts ?? [])[i]?.rel ?? '')
+          next.forEach((c, j) => {
+            if (j !== i && isCoreRel((state.conflicts ?? [])[j]?.rel ?? '') === unit) next[j] = { ...(next[j] ?? {}), name }
+          })
+          return next
+        })
+      }
+
+      const apply = async () => {
+        const conflicts = state.conflicts ?? []
+        const missing = choices.findIndex((c, i) => c?.action === 'rename' && !String(c.name ?? '').trim())
+        if (missing >= 0) {
+          setError(`第 ${missing + 1} 项选了改名但没填名字`)
+          return
+        }
+        if (!state.sessionId || typeof state.execute !== 'function') {
+          setError('拿不到当前会话，无法执行；请改用 /atp apply 命令')
+          return
+        }
+        try {
+          writeStore({ busy: true })
+          const line = buildApplySpec(choices)
+          const result = await state.execute(state.sessionId, line)
+          if (result && result.ok === false) throw new Error(result?.error?.message ?? '命令执行失败')
+          writeStore({ open: false, busy: false, message: `已执行：${line}` })
+          if (typeof state.afterApply === 'function') await state.afterApply()
+        } catch (e) {
+          setError(String(e?.message ?? e))
+          writeStore({ busy: false })
+        }
+      }
+
+      const footer = h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
+        typeof Button === 'function'
+          ? h(Button, { variant: 'outline', onClick: () => writeStore({ open: false }) }, '取消')
+          : h('button', { type: 'button', onClick: () => writeStore({ open: false }) }, '取消'),
+        typeof Button === 'function'
+          ? h(Button, { variant: 'primary', disabled: state.busy, onClick: () => void apply() }, state.busy ? '执行中…' : '应用')
+          : h('button', { type: 'button', disabled: state.busy, onClick: () => void apply() }, '应用'),
+      )
+
+      const body = [
+        h('div', { key: 'cwd', style: { opacity: 0.65, fontSize: 12, marginBottom: 10, wordBreak: 'break-all' } }, state.cwd),
+        ...(state.conflicts ?? []).map((conflict, i) =>
+          h(ChoiceRow, {
+            key: `c${i}`,
+            index: i,
+            conflict,
+            choice: choices[i],
+            onChoose,
+            renameEnabled: true,
+            onRename,
+          })),
+        error ? h('div', { key: 'err', style: { color: 'var(--dsh-danger, #c0563b)', marginTop: 10 } }, error) : null,
+        h('div', { key: 'hint', style: { opacity: 0.55, fontSize: 12, marginTop: 12 } },
+          '点"应用"会执行一条 /atp apply 命令（与手动输入等价，可在会话里看到审计记录）。'),
+      ].filter(Boolean)
+
+      if (typeof Modal !== 'function') {
+        return h('div', { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, padding: 20, overflow: 'auto' } },
+          h('div', { style: { background: 'var(--dsh-surface, #1b1b1b)', padding: 16, borderRadius: 10 } }, body, footer))
+      }
+      return h(Modal, { open: true, onClose: () => writeStore({ open: false }), title: '处理同名内容', closeLabel: '取消', footer }, body)
     }
 
     function Panel() {
@@ -123,6 +294,20 @@ window.__ModuleLoader__.load({
             )
           })
           children.push(
+            h('div', { key: 'resolve', style: { marginTop: 8 } },
+              typeof Button === 'function'
+                ? h(Button, {
+                    variant: 'primary',
+                    onClick: () => {
+                      const ctx = Panel.ctx
+                      const { sessionId, cwd } = currentSession(ctx)
+                      const execute = async (sid, line) => ctx?.remote?.commands?.execute?.(sid, line, [])
+                      writeStore({ open: true, conflicts, cwd: cwd ?? '', sessionId: sessionId ?? '', execute, afterApply: refresh })
+                    },
+                  }, '逐项处理冲突…')
+                : null),
+          )
+          children.push(
             h('div', { key: 'sug', style: { marginTop: 8 } },
               h('div', { style: { opacity: 0.65, marginBottom: 4 } }, '逐项决定后执行（可改 覆盖→备份 / 改名:新名）：'),
               h('code', { style: { display: 'block', padding: 6, borderRadius: 6, background: 'rgba(127,127,127,0.12)' } }, suggestion),
@@ -157,11 +342,19 @@ window.__ModuleLoader__.load({
         order: 36,
         label: () => '协作规程',
       }, () => h(Panel, null)))
+
+      // 冲突处理弹窗：常驻挂载，关闭时渲染 null
+      ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: 'agent-team-playbook.resolve',
+      }, () => h(ResolveDialog, null)))
     }
 
     exports.apply = apply
-    exports.inject = ['slots', 'sessions']
+    exports.inject = ['slots', 'sessions', 'remote.commands']
     exports.name = NAME
+    // 测试缝：拼命令是纯函数，单独可测
+    exports.__test = { buildApplySpec }
     return module.exports
   },
 })
