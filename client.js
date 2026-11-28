@@ -43,6 +43,7 @@ window.__ModuleLoader__.load({
       store.listeners.add(fn)
       return () => store.listeners.delete(fn)
     }
+    let autoOpened = ''
     const useStore = () => {
       const [snap, setSnap] = React.useState(readStore)
       React.useEffect(() => subscribeStore(() => setSnap(readStore())), [])
@@ -251,6 +252,20 @@ window.__ModuleLoader__.load({
         void refresh()
       }, [refresh])
 
+      // 首次进入且已有冲突 → 自动弹一次；同一组冲突只自动弹一次
+      useEffect(() => {
+        if (state.phase !== 'ready') return
+        const found = state.data?.conflicts ?? []
+        if (found.length === 0) return
+        const fingerprint = `${state.cwd ?? ''}|${found.map((c) => c.rel).join(',')}`
+        if (autoOpened === fingerprint) return
+        autoOpened = fingerprint
+        const ctx = Panel.ctx
+        const { sessionId, cwd } = currentSession(ctx)
+        const execute = async (sid, line) => ctx?.remote?.commands?.execute?.(sid, line, [])
+        writeStore({ open: true, conflicts: found, cwd: cwd ?? '', sessionId: sessionId ?? '', execute, afterApply: refresh })
+      }, [state, refresh])
+
       const conflicts = state.phase === 'ready' ? state.data?.conflicts ?? [] : []
 
       const suggestion = useMemo(() => {
@@ -320,8 +335,28 @@ window.__ModuleLoader__.load({
         }
       }
 
+      // 安装：无冲突直接装；有冲突**直接弹窗**（等价于"install 后自动弹 UI"）
+      const install = useCallback(async () => {
+        const ctx = Panel.ctx
+        const { sessionId, cwd } = currentSession(ctx)
+        const execute = (line) => ctx?.remote?.commands?.execute?.(sessionId, line, [])
+        try {
+          const data = await fetchStatus(cwd)
+          const found = data?.conflicts ?? []
+          if (found.length > 0) {
+            writeStore({ open: true, conflicts: found, cwd: cwd ?? '', sessionId: sessionId ?? '', execute, afterApply: refresh })
+            return
+          }
+          await execute('/atp install')
+          await refresh()
+        } catch (error) {
+          setState({ phase: 'error', message: String(error?.message ?? error) })
+        }
+      }, [refresh])
+
       children.push(
-        h('div', { key: 'actions', style: { marginTop: 10, display: 'flex', gap: 8 } },
+        h('div', { key: 'actions', style: { marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' } },
+          h(LinkButton, { onClick: () => void install() }, '安装到工作区'),
           h(LinkButton, { onClick: () => void refresh() }, '重新检测'),
           h(LinkButton, { onClick: () => void copy('/atp install') }, copied === '/atp install' ? '已复制 ✓' : '复制 /atp install')),
       )
