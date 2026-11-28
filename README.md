@@ -216,6 +216,18 @@ npx dsh-agent-team-playbook init --global --inline-core   # 用户全局：内�
 - v1.7：拆分为「常驻核心 + 9 分册」
 - 完整历史见 `docs/workflow/rules/09-环境适配与变更记录.md`
 
+## 兼容性
+
+插件包在 `package.json` 里声明了对 DSH 运行时（`dsh-app-boot` 版本）的要求：
+
+```json
+"engines": { "node": ">=20", "dsh": ">=0.2.2-rc.1 <0.3.0-0" }
+```
+
+- DSH 安装/激活前会用 `engines.dsh` 校验；不满足会**明确拒绝**，而不是装了不动
+- 当前范围 = 实际验证过的版本（`0.2.2-rc.1`）到 0.3 之前；没有更早版本的实测，所以不虚标
+- 只声明实测范围，是为了避免"装上了但面板/命令不生效"这类静默故障
+
 ## License
 
 MIT，见 [LICENSE](LICENSE)。
