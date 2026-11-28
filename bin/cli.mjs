@@ -14,6 +14,7 @@
  *                                     [--force | --skip-conflicts]
  */
 import { createInterface } from 'node:readline/promises'
+import os from 'node:os'
 import { stdin, stdout } from 'node:process'
 import { readFile, writeFile, mkdir, stat, readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -36,13 +37,23 @@ const C = {
 }
 
 function parseArgs(argv) {
-  const opts = { dir: process.cwd(), dryRun: false, force: false, skipConflicts: false, help: false }
+  const opts = {
+    dir: process.cwd(),
+    dryRun: false,
+    force: false,
+    skipConflicts: false,
+    help: false,
+    global: false,
+    yes: false,
+  }
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i]
     if (a === '--dir') opts.dir = path.resolve(argv[(i += 1)] ?? '.')
     else if (a === '--dry-run') opts.dryRun = true
     else if (a === '--force' || a === '-f') opts.force = true
     else if (a === '--skip-conflicts') opts.skipConflicts = true
+    else if (a === '--global' || a === '-g') opts.global = true
+    else if (a === '--yes' || a === '-y') opts.yes = true
     else if (a === '--help' || a === '-h') opts.help = true
     else if (a === 'init') continue
     else {
@@ -61,10 +72,20 @@ ${C.bold('用法')}
 
 ${C.bold('选项')}
   --dir <路径>        目标目录（默认当前目录）
+  --global, -g        装成用户全局指令：复制到 $DSH_HOME/agent-team-playbook/，
+                      并在 $DSH_HOME/AGENTS.md 追加一个受管区块（不覆盖原有内容）
+  --yes, -y           非交互确认（--global 追加区块用）
   --dry-run           只显示计划，不写任何文件
   --force, -f         冲突时全部覆盖（不询问）
   --skip-conflicts    冲突时全部跳过（不询问）
   -h, --help          显示本帮助
+
+${C.bold('两种安装方式的区别（重要）')}
+  · 项目安装（默认）：写 <项目>/AGENTS.md + docs/。
+    工作区 AGENTS.md 会被 DSH 每轮自动注入 ⇒ 成为**所有 agent 的固定上下文**。
+  · 全局安装（--global）：复制到 $DSH_HOME/agent-team-playbook/，
+    仅往 $DSH_HOME/AGENTS.md 追加一个受管区块（可重复执行，原地更新）。
+    适用于"本机所有项目都按这套规程走"。
 
 ${C.bold('行为')}
   · 交互模式下，每个冲突单独询问：覆盖 / 改名 / 跳过 / 剩余全部覆盖 / 中止
@@ -124,6 +145,106 @@ function rewriteReferences(text, renames) {
   return out
 }
 
+/** 受管区块标记：重复执行时原地更新，绝不碰区块外内容。 */
+const BLOCK_START = '<!-- agent-team-playbook:start -->'
+const BLOCK_END = '<!-- agent-team-playbook:end -->'
+
+function managedBlock(destAbs) {
+  return [
+    BLOCK_START,
+    '## 多智能体协作规程（agent-team-playbook）',
+    '',
+    `本机所有项目按以下规程协作：\`${destAbs}/AGENTS.md\`（常驻核心，先读它）。`,
+    `分册细则在 \`${destAbs}/docs/workflow/\`，按核心 §8 索引按需查阅。`,
+    '',
+    '> 本节由 `npx dsh-agent-team-playbook init --global` 维护，块内内容会被自动覆盖；块外内容不受影响。',
+    BLOCK_END,
+  ].join('\n')
+}
+
+/**
+ * 全局安装：把 playbook 复制到 $DSH_HOME/agent-team-playbook/，
+ * 并只在 $DSH_HOME/AGENTS.md 里维护一个受管区块（不覆盖用户已有内容）。
+ *
+ * 这是让规程成为「所有工作区的常驻上下文」的唯一途径——DSH 的指令加载器只认文件，
+ * 没有插件注入通道。
+ */
+async function runGlobalMode(opts) {
+  const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+  const destDir = path.join(home, 'agent-team-playbook')
+  const instrFile = path.join(home, 'AGENTS.md')
+  const block = managedBlock(destDir)
+
+  const rels = [ROOT_FILE, ...(await walk(ROOT_DIR))]
+  console.log(C.bold('全局安装计划'))
+  console.log(`  复制 ${rels.length} 个文件 → ${destDir}`)
+  console.log(`  维护受管区块     → ${instrFile}`)
+
+  let existing = ''
+  if (existsSync(instrFile)) {
+    existing = await readFile(instrFile, 'utf8')
+    const hasBlock = existing.includes(BLOCK_START)
+    console.log(
+      C.dim(`  ${instrFile} 已存在（${existing.length} 字节），`) +
+        (hasBlock ? C.green('检测到本插件的受管区块 → 原地更新') : C.yellow('没有受管区块 → 需追加')),
+    )
+    if (!hasBlock && !opts.yes && !opts.force) {
+      if (!(stdin.isTTY && stdout.isTTY)) {
+        console.error(C.red('\n✗ 该文件已存在且不含本插件区块，非交互模式下不追加。'))
+        console.error('  确认可追加请加 --yes；或先手动查看该文件。')
+        process.exit(1)
+      }
+      const rl = createInterface({ input: stdin, output: stdout })
+      try {
+        const a = (await rl.question(`\n在 ${instrFile} 末尾追加受管区块？（已有内容不会被改动）[y/N] > `)).trim().toLowerCase()
+        if (a !== 'y' && a !== 'yes') {
+          console.log('已取消，未写入任何文件。')
+          process.exit(1)
+        }
+      } finally {
+        rl.close()
+      }
+    }
+  } else {
+    console.log(C.dim(`  ${instrFile} 不存在 → 新建`))
+  }
+
+  if (opts.dryRun) {
+    console.log(C.dim('\n将要追加的区块：'))
+    console.log(block.split('\n').map((l) => `  ${C.dim('│')} ${l}`).join('\n'))
+    console.log(C.dim('\n（--dry-run 结束）'))
+    return
+  }
+
+  // 1) 复制 playbook（命名空间目录，整体刷新；不触碰用户其它文件）
+  let copied = 0
+  for (const rel of rels) {
+    const srcAbs = path.join(SOURCE_ROOT, rel)
+    const destAbs = path.join(destDir, rel)
+    await mkdir(path.dirname(destAbs), { recursive: true })
+    await writeFile(destAbs, await readFile(srcAbs))
+    copied += 1
+  }
+
+  // 2) 维护受管区块
+  let next
+  if (existing.includes(BLOCK_START) && existing.includes(BLOCK_END)) {
+    const re = new RegExp(`${BLOCK_START.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${BLOCK_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
+    next = existing.replace(re, block)
+  } else if (existing.length > 0) {
+    next = `${existing.replace(/\s*$/, '')}\n\n${block}\n`
+  } else {
+    next = `${block}\n`
+  }
+  await mkdir(path.dirname(instrFile), { recursive: true })
+  await writeFile(instrFile, next, 'utf8')
+
+  console.log(C.green(`\n✓ 完成：复制 ${copied} 个文件到 ${destDir}`))
+  console.log(C.green(`✓ 已维护受管区块：${instrFile}`))
+  console.log(C.dim('  重载/新开会话后，所有工作区都会带上这段常驻指令。'))
+  console.log(C.dim('  卸载：删掉上述两个路径，或删除 AGENTS.md 里 agent-team-playbook 标记之间的内容。'))
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
   if (opts.help) return printHelp()
@@ -132,6 +253,10 @@ async function main() {
     console.error(C.red(`✗ 找不到包内 skill 目录：${SOURCE_ROOT}`))
     process.exit(1)
   }
+  if (opts.global) {
+    return runGlobalMode(opts)
+  }
+
   if (!existsSync(opts.dir)) {
     console.error(C.red(`✗ 目标目录不存在：${opts.dir}`))
     process.exit(1)

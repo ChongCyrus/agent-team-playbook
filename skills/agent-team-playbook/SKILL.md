@@ -43,13 +43,26 @@ whenToUse: 用户要求组队/多 agent 协作；或强调要流程严谨、要�
 
 ## 落地到用户项目时
 
+**先分清两件事（很重要）**：
+
+| 形态 | 是否常驻上下文 |
+|---|---|
+| 本 skill | ❌ **按需加载**——agent 觉得相关才读 |
+| 工作区 `AGENTS.md` | ✅ 每轮自动注入 = **所有 agent 的固定上下文** |
+| 用户全局 `$DSH_HOME/AGENTS.md` | ✅ 对所有工作区生效 |
+
+DSH 的指令加载器**只认文件**（没有插件注入通道），所以要"让团队每个 agent 都默认遵守"，必须写成文件。
+
 插件安装**不会**写用户任何文件。真要写入：
 
 ```bash
-npx dsh-agent-team-playbook init          # 交互式，冲突时逐项询问（覆盖/改名/跳过）
+npx dsh-agent-team-playbook init             # 装进当前项目（AGENTS.md + docs/）
 npx dsh-agent-team-playbook init --dry-run   # 只看计划，不写
+npx dsh-agent-team-playbook init --global    # 用户全局：复制到 $DSH_HOME/agent-team-playbook/，
+                                             # 并在 $DSH_HOME/AGENTS.md 追加受管区块
 ```
 
 - 遇到同名文件/目录会**逐个询问**，不会静默覆盖。
 - 选「改名」时，写出的文件里对它的引用会**同步改写**，不会留下断链。
-- 非交互环境（CI）默认遇到冲突就中止，需要显式 `--force` 或 `--rename`。
+- `--global` 只维护标记之间的区块，**块外内容一律不动**，可重复执行（幂等更新）。
+- 非交互环境（CI）默认遇到冲突就中止，需显式 `--force` / `--skip-conflicts` / `--yes`。

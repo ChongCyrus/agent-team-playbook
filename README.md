@@ -107,6 +107,15 @@ npx dsh-agent-team-playbook init --dry-run   # 先看计划
 npx dsh-agent-team-playbook init             # 交互式安装
 ```
 
+**两种安装方式的区别（重要）**：
+
+| 方式 | 效果 |
+|---|---|
+| `init`（默认） | 写 `<项目>/AGENTS.md` + `docs/` → 工作区 AGENTS.md 被 DSH 每轮自动注入 = **所有 agent 的固定上下文** |
+| `init --global` | 复制到 `$DSH_HOME/agent-team-playbook/`，并在 `$DSH_HOME/AGENTS.md` 维护一个**受管区块**（块外内容不动，幂等更新） |
+
+> **为什么必须写文件**：DSH 的指令加载器（`dsh-agent-instructions`）只认文件（项目根/子目录/用户全局的 `AGENTS.md`、`CLAUDE.md`、`*.local.md`），**没有插件注入通道**。所以「常驻上下文」= 文件；skill 只是「按需查阅」。
+
 冲突处理是本命令的核心设计：
 
 | 情况 | 行为 |
