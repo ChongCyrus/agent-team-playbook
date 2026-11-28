@@ -90,31 +90,39 @@ docs/workflow/practices/   经验与做法库
 
 ## 安装
 
-### 作为 DSH skill（推荐，只读、零侵入）
+### ① 作为 DSH 插件（只读命令，零写入）
 
 ```bash
 dsh plugin --profile web add dsh-agent-team-playbook
 ```
 
-- 插件的**全部作用**是把本 playbook 挂成一个 skill（`agent-team-playbook`），让 agent 在需要时按需加载。
-- **不会写你任何文件**：skill 内容只读地放在包里，通过官方 `dsh-skill-filesystem` 提供器挂载。
-- 如果已有同名 skill，DSH 对同名 skill **不报错、只静默择优**——本插件会在启动时检测并在被其他来源遮蔽时给出 warn 提示。
+装好后多一个只读命令：
 
-### 把 playbook 装进项目（可选，会写文件）
+| 命令 | 作用 |
+|---|---|
+| `/agent-team` | 规程摘要（档位、四问、收尾三问）+ 安装方式 |
+| `/agent-team core` | 输出核心全文，读完即在本轮按它协作 |
+| `/agent-team paths` | 各分册的绝对路径，按需查阅 |
+| `/agent-team help` | 用法 |
+
+插件**不写任何文件**、也**不挂 skill**——skill 的目录摘要会常驻占用上下文（约 300 tokens/轮），而分册本来就不会自动进上下文，用命令按需取更划算。
+
+### ② 装成"常驻上下文"（会写文件，核心价值）
 
 ```bash
 npx dsh-agent-team-playbook init --dry-run   # 先看计划
-npx dsh-agent-team-playbook init             # 交互式安装
+npx dsh-agent-team-playbook init             # 装进当前项目
+npx dsh-agent-team-playbook init --global    # 用户全局：受管区块（指针，约 300 字符）
+npx dsh-agent-team-playbook init --global --inline-core   # 用户全局：内联核心全文（真常驻）
 ```
 
-**两种安装方式的区别（重要）**：
+| 方式 | 效果 | 常驻成本 |
+|---|---|---|
+| `init`（项目级） | 写 `<项目>/AGENTS.md` + `docs/` → DSH 每轮自动注入 | 约 5.3k 字符/轮 |
+| `init --global` | 复制到 `$DSH_HOME/agent-team-playbook/`，在 `$DSH_HOME/AGENTS.md` 维护受管区块（指针） | 约 300 字符/轮 |
+| `init --global --inline-core` | 同上，但区块内联核心全文（路径自动绝对化） | 约 6.3k 字符/轮 |
 
-| 方式 | 效果 |
-|---|---|
-| `init`（默认） | 写 `<项目>/AGENTS.md` + `docs/` → 工作区 AGENTS.md 被 DSH 每轮自动注入 = **所有 agent 的固定上下文** |
-| `init --global` | 复制到 `$DSH_HOME/agent-team-playbook/`，并在 `$DSH_HOME/AGENTS.md` 维护一个**受管区块**（块外内容不动，幂等更新） |
-
-> **为什么必须写文件**：DSH 的指令加载器（`dsh-agent-instructions`）只认文件（项目根/子目录/用户全局的 `AGENTS.md`、`CLAUDE.md`、`*.local.md`），**没有插件注入通道**。所以「常驻上下文」= 文件；skill 只是「按需查阅」。
+> **为什么必须写文件**：DSH 的指令加载器（`dsh-agent-instructions`）只认文件（项目根/子目录/用户全局的 `AGENTS.md`、`CLAUDE.md`、`*.local.md`），**没有插件注入通道**。所以「常驻上下文」只能靠文件；命令和分册都是按需取。
 
 冲突处理是本命令的核心设计：
 
@@ -123,7 +131,7 @@ npx dsh-agent-team-playbook init             # 交互式安装
 | 目标目录没有同名内容 | 直接安装 `AGENTS.md` + `docs/` |
 | 检测到冲突 | **逐个询问**：覆盖 / 改名 / 跳过 / 剩余全部覆盖 / 中止 |
 | 选了「改名」 | 写出的文件里对它的引用**同步改写**（如 `AGENTS.md` → `AGENTS.playbook.md`、`docs/` → `team-docs/`），不留断链 |
-| 管道 / CI（非交互） | **默认中止**，绝不静默覆盖；需显式 `--force` 或 `--skip-conflicts` |
+| 管道 / CI（非交互） | **默认中止**，绝不静默覆盖；需显式 `--force` / `--skip-conflicts` / `--yes` |
 
 ## 快速开始
 

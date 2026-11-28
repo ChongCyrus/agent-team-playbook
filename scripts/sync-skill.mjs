@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * 把仓库里的 playbook 文档同步进 skill 目录，供 npm 包携带。
+ * 把仓库里的 playbook 文档同步进 playbook/ 目录，供 npm 包携带。
  *
  * 为什么要有这一步：文档的权威位置在仓库根目录（`AGENTS.md` + `docs/`），
- * 而 DSH 的 skill 必须是一个自包含目录（`skills/<name>/SKILL.md`）。
+ * 而 npm 包需要一个自包含、路径固定的副本供 CLI 安装。
  * 直接复制会漂移，所以用本脚本单向同步，并提供 `--check` 供发布前校验。
  *
  * 生成的文件清单记录在 `.synced.json`，下次同步只删自己生成的东西，
- * 绝不碰 `SKILL.md` 之类手写文件。
+ * 绝不碰手写文件。
  *
  * 用法：
  *   node scripts/sync-skill.mjs           # 生成/更新
@@ -19,7 +19,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const SKILL_DIR = path.join(ROOT, 'skills', 'agent-team-playbook')
+const DEST_DIR = path.join(ROOT, 'playbook')
 const MANIFEST = path.join(ROOT, '.skill-sync.json')
 const CHECK = process.argv.includes('--check')
 
@@ -63,7 +63,7 @@ async function readManifest() {
 }
 
 async function main() {
-  await mkdir(SKILL_DIR, { recursive: true })
+  await mkdir(DEST_DIR, { recursive: true })
 
   const wanted = new Set(SOURCES)
   for (const dir of SOURCE_DIRS) {
@@ -77,7 +77,7 @@ async function main() {
   // 删除上次生成、这次不再需要的文件（只限清单里记录的，手写文件不受影响）。
   if (!CHECK) {
     for (const rel of stale) {
-      await rm(path.join(SKILL_DIR, rel), { force: true })
+      await rm(path.join(DEST_DIR, rel), { force: true })
     }
   }
 
@@ -86,7 +86,7 @@ async function main() {
 
   for (const rel of files) {
     const src = path.join(ROOT, rel)
-    const dest = path.join(SKILL_DIR, rel)
+    const dest = path.join(DEST_DIR, rel)
 
     if (!existsSync(src)) {
       missing.push(`源文件缺失：${rel}`)
@@ -111,18 +111,18 @@ async function main() {
     const problems = [...missing, ...drifted.map((rel) => `未同步：${rel}`)]
     if (stale.length > 0) problems.push(`残留：${stale.join(', ')}`)
     if (problems.length > 0) {
-      console.error('✗ skills/agent-team-playbook 与源文档不一致：')
+      console.error('✗ playbook/ 与源文档不一致：')
       for (const p of problems) console.error('  -', p)
       console.error('  修复：node scripts/sync-skill.mjs')
       process.exit(1)
     }
-    console.log(`✓ skill 内容与源文档一致（${files.length} 个文件）`)
+    console.log(`✓ playbook 内容与源文档一致（${files.length} 个文件）`)
     return
   }
 
   await writeFile(MANIFEST, JSON.stringify({ files, generatedAt: new Date().toISOString() }, null, 2) + '\n')
 
-  console.log(`✓ 已同步 ${files.length} 个文件到 skills/agent-team-playbook/`)
+  console.log(`✓ 已同步 ${files.length} 个文件到 playbook/`)
   if (stale.length > 0) console.log(`  清理 ${stale.length} 个过期文件：${stale.join(', ')}`)
   for (const m of missing) console.error('  ✗', m)
   if (missing.length > 0) process.exit(1)

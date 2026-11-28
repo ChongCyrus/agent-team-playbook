@@ -28,7 +28,7 @@ process.stdout.on('error', (err) => {
   if (err?.code === 'EPIPE') process.exit(0)
   throw err
 })
-const SOURCE_ROOT = path.join(PACKAGE_ROOT, 'skills', 'agent-team-playbook')
+const SOURCE_ROOT = path.join(PACKAGE_ROOT, 'playbook')
 
 /** 会被安装进用户项目的条目：playbook 本体，不含 SKILL.md（那是 skill 入口）与同步清单。 */
 const ROOT_FILE = 'AGENTS.md'
@@ -280,7 +280,7 @@ async function main() {
   if (opts.help) return printHelp()
 
   if (!existsSync(SOURCE_ROOT)) {
-    console.error(C.red(`✗ 找不到包内 skill 目录：${SOURCE_ROOT}`))
+    console.error(C.red(`✗ 找不到包内 playbook 目录：${SOURCE_ROOT}`))
     process.exit(1)
   }
   if (opts.global) {
