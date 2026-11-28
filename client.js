@@ -34,83 +34,10 @@ window.__ModuleLoader__.load({
      * 这样和「音乐制作 / 标准模式」在同一行时视觉一致。
      */
     const CHIP_CSS = `
-.atp-chip{
-  border-radius: var(--dsw-radius-sm, 8px);
-  max-width: min(100%, 360px);
-  min-height: 28px;
-  color: var(--dsw-alias-label-primary, inherit);
-  cursor: pointer;
-  background: 0 0;
-  border: none;
-  align-items: center;
-  gap: 4px;
-  padding: 0 8px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 20px;
-  display: inline-flex;
-}
-.atp-chip[aria-expanded="true"]{ background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.14)); }
-@media (hover:hover){ .atp-chip:not(:disabled):hover{ background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.14)); } }
-.atp-chip:disabled{ cursor: default; opacity: .6; }
-.atp-chip .atp-chip-label{ text-overflow: ellipsis; white-space: nowrap; min-width: 0; overflow: hidden; }
-.atp-chip .atp-chip-glyph{ flex: none; color: var(--dsw-alias-label-primary, inherit); }
-/* heroOptions 容器原生是 margin-left:auto（靠右）；把我们那行拉回左对齐，紧跟「标准模式」后面 */
-div:has(> .atp-chip){ margin-left: 0 !important; }
-
-/* chip 包裹层：给下拉菜单做定位基准 */
-.atp-wrap{ position: relative; display: inline-flex; }
-
-/* 下拉菜单：沿用原生菜单的材质变量 */
-.atp-menu{
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 60;
-  min-width: 200px;
-  padding: 4px;
-  border-radius: var(--dsw-radius-md, 10px);
-  box-shadow: var(--dsw-elevation-panel, 0 8px 24px rgba(0,0,0,.32));
-  background: var(--dsw-specific-menu, rgba(40,40,40,.98));
-  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(12px));
-}
-.atp-menu-item{
-  width: 100%;
-  min-height: 32px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm, 8px);
-  background: none;
-  color: var(--dsw-alias-label-primary, inherit);
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-.atp-menu-item:hover{ background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.16)); }
-.atp-menu-item[data-danger="true"]{ color: var(--dsw-alias-label-danger, #e06c5a); }
-.atp-menu-hint{ padding: 6px 10px; font-size: 12px; opacity: .6; }
-
-/* 冲突面板：限高 + 内部滚动，避免撑满整屏 */
-.atp-conflict-body{
-  max-height: min(60vh, 520px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 4px;
-}
-.atp-conflict-row{ display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid rgba(127,127,127,.18); }
-.atp-conflict-row:first-child{ border-top: none; }
-.atp-conflict-path{ flex: 1 1 auto; min-width: 0; word-break: break-all; font-size: 13px; }
-.atp-conflict-actions{ flex: none; display: flex; gap: 6px; flex-wrap: wrap; }
-.atp-pill{ min-height: 26px; padding: 0 8px; border-radius: var(--dsw-radius-sm, 8px); border: 1px solid rgba(127,127,127,.35);
-  background: none; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
-.atp-pill:hover{ background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.16)); }
-.atp-toolbar{ display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
-.atp-muted{ opacity: .6; font-size: 12px; }
+/* heroOptions 原生是 margin-left:auto（靠右）；把我们的入口拉回左对齐，紧跟「标准模式」后面 */
+div:has(> .atp-wrap){ margin-left: 0 !important; }
+/* 菜单项悬停由 React 状态处理，这里只兜底原生按钮默认样式 */
+.agent-team-playbook-menu button{ all: unset; }
 `
     const CHIP_STYLE_ID = 'agent-team-playbook/chip.css'
 
@@ -244,42 +171,48 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
     }
 
     /**
-     * 单个冲突行：点「覆盖 / 备份」立即定案（该行随即消失）；
-     * 点「改名…」展开名字输入，确认后定案。
+     * 单个冲突行（紧凑一行）：文件名 + 三个小按钮；改名时就地展开输入。
      */
     function ChoiceRow({ index, conflict, onDecide }) {
       const [renaming, setRenaming] = React.useState(false)
       const [name, setName] = React.useState('')
 
-      const pill = (text, onClick, key) => h('button', { key, type: 'button', className: 'atp-pill', onClick }, text)
+      const pill = (text, onClick, key) => h('button', {
+        key,
+        type: 'button',
+        style: S.pill,
+        onClick,
+      }, text)
 
-      return h('div', { className: 'atp-conflict-row' },
-        h('div', { className: 'atp-conflict-path' },
-          h('div', null, `${index + 1}. ${conflict.rel}`),
-          h('div', { className: 'atp-muted' }, conflict.reason),
-          renaming
-            ? h('div', { style: { display: 'flex', gap: 6, marginTop: 6 } },
-                h('input', {
-                  value: name,
-                  placeholder: '新名字，如 team-docs / AGENTS.team.md',
-                  onChange: (e) => setName(e.target.value),
-                  style: { flex: '1 1 auto', minWidth: 0, height: 26, padding: '0 8px', borderRadius: 6, border: '1px solid rgba(127,127,127,.4)', background: 'transparent', color: 'inherit', font: 'inherit', fontSize: 12 },
-                }),
-                pill('确定', () => {
-                  const clean = String(name).trim()
-                  if (clean !== '') onDecide(index, 'rename', clean)
-                }, 'ok'),
-                pill('取消', () => setRenaming(false), 'cancel'))
-            : null),
-        h('div', { className: 'atp-conflict-actions' },
+      if (renaming) {
+        return h('div', { style: { ...S.row, flexWrap: 'wrap' } },
+          h('div', { style: { width: '100%', ...S.muted, marginBottom: 4 } },
+            `${index + 1}. ${shortName(conflict.rel)} —— 新名字：`),
+          h('input', {
+            value: name,
+            placeholder: 'team-docs 或 AGENTS.team.md',
+            onChange: (e) => setName(e.target.value),
+            style: { flex: '1 1 120px', minWidth: 0, height: 26, padding: '0 8px', borderRadius: 6, border: '1px solid rgba(127,127,127,.35)', background: 'transparent', color: 'inherit', font: 'inherit', fontSize: 12 },
+          }),
+          pill('确定', () => {
+            const clean = String(name).trim()
+            if (clean !== '') onDecide(index, 'rename', clean)
+          }, 'ok'),
+          pill('取消', () => setRenaming(false), 'no'))
+      }
+
+      return h('div', { style: S.row },
+        h('div', { style: S.fileName, title: conflict.rel },
+          h('span', { style: { opacity: 0.5, marginRight: 6 } }, `${index + 1}.`),
+          shortName(conflict.rel)),
+        h('div', { style: S.actions },
           pill('覆盖', () => onDecide(index, 'overwrite'), 'ow'),
           pill('备份', () => onDecide(index, 'backup'), 'bk'),
-          renaming ? null : pill('改名…', () => setRenaming(true), 'rn')))
+          pill('改名', () => setRenaming(true), 'rn')))
     }
 
     /**
-     * 冲突处理面板：限高可滚动；逐项点击即定案、该行消失；
-     * 全部定案后自动合成一条 /atp apply 执行。
+     * 冲突处理面板：限高滚动；点一项即定案、该行消失；全部定案后自动执行。
      */
     function ResolveDialog() {
       const state = useStore()
@@ -300,30 +233,12 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
 
       const conflicts = state.conflicts ?? []
 
-      const decide = (index, action, name) => {
-        decidedRef.current.set(index, { action, name })
-        setDecidedCount(decidedRef.current.size)
-        void maybeApply()
-      }
-
-      const decideAll = (action) => {
-        conflicts.forEach((_, i) => {
-          if (!decidedRef.current.has(i)) decidedRef.current.set(i, { action })
-        })
-        setDecidedCount(decidedRef.current.size)
-        void maybeApply()
-      }
-
       const maybeApply = async () => {
         if (runningRef.current) return
         if (decidedRef.current.size < conflicts.length) return
         runningRef.current = true
         try {
-          // 同一单元（核心/分册）共享改名值
-          const choices = conflicts.map((c, i) => {
-            const d = decidedRef.current.get(i) ?? { action: 'overwrite' }
-            return d
-          })
+          const choices = conflicts.map((c, i) => decidedRef.current.get(i) ?? { action: 'overwrite' })
           const coreName = choices.find((c, i) => c.action === 'rename' && conflicts[i].rel === 'AGENTS.md')?.name
           const docsName = choices.find((c, i) => c.action === 'rename' && conflicts[i].rel !== 'AGENTS.md')?.name
           const normalized = conflicts.map((c, i) => {
@@ -347,6 +262,21 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
         }
       }
 
+      const decide = (index, action, name) => {
+        decidedRef.current.set(index, { action, name })
+        setDecidedCount(decidedRef.current.size)
+        void maybeApply()
+      }
+
+      const decideAll = (action) => {
+        conflicts.forEach((_, i) => {
+          if (!decidedRef.current.has(i)) decidedRef.current.set(i, { action })
+        })
+        setDecidedCount(decidedRef.current.size)
+        void maybeApply()
+      }
+
+      const remaining = conflicts.length - decidedCount
       const rows = conflicts
         .map((conflict, index) => ({ conflict, index }))
         .filter(({ index }) => !decidedRef.current.has(index))
@@ -355,36 +285,81 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
       const footer = h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
         typeof Button === 'function'
           ? h(Button, { variant: 'outline', onClick: () => writeStore({ open: false }) }, '取消')
-          : h('button', { type: 'button', onClick: () => writeStore({ open: false }) }, '取消'))
+          : h('button', { type: 'button', style: S.pill, onClick: () => writeStore({ open: false }) }, '取消'))
 
       const body = [
-        h('div', { key: 'cwd', className: 'atp-muted', style: { marginBottom: 8, wordBreak: 'break-all' } }, state.cwd),
-        h('div', { key: 'bar', className: 'atp-toolbar' },
-          h('span', { className: 'atp-muted' }, `还剩 ${conflicts.length - decidedCount} 项`),
-          h('button', { type: 'button', className: 'atp-pill', onClick: () => decideAll('overwrite') }, '全部覆盖'),
-          h('button', { type: 'button', className: 'atp-pill', onClick: () => decideAll('backup') }, '全部备份')),
-        h('div', { key: 'list', className: 'atp-conflict-body' }, rows.length > 0 ? rows : h('div', { className: 'atp-muted' }, '已全部决定，正在执行…')),
-        error ? h('div', { key: 'err', style: { color: 'var(--dsh-alias-label-danger, #e06c5a)', marginTop: 8 } }, error) : null,
-        h('div', { key: 'hint', className: 'atp-muted', style: { marginTop: 8 } },
-          '每点一项即定案；全部决定后自动执行一条 /atp apply 命令（与手打等价，可在会话里看到）。'),
+        h('div', { key: 'bar', style: S.toolbar },
+          h('span', { style: S.muted }, `还剩 ${remaining} 项`),
+          h('button', { type: 'button', style: S.pill, onClick: () => decideAll('overwrite') }, '全部覆盖'),
+          h('button', { type: 'button', style: S.pill, onClick: () => decideAll('backup') }, '全部备份')),
+        h('div', { key: 'list', style: S.dialogBody },
+          rows.length > 0 ? rows : h('div', { style: S.muted }, '已全部决定，正在执行…')),
+        error ? h('div', { key: 'err', style: { color: 'var(--dsw-alias-label-danger, #e06c5a)', marginTop: 8, fontSize: 12 } }, error) : null,
+        h('div', { key: 'hint', style: { ...S.muted, marginTop: 8, lineHeight: 1.4 } },
+          '点一项即定案，全部决定后自动执行一条 /atp apply。'),
       ].filter(Boolean)
 
       if (typeof Modal !== 'function') {
-        return h('div', { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 9999, padding: 16, overflow: 'auto' } },
-          h('div', { style: { background: 'var(--dsw-specific-menu, #1b1b1b)', padding: 16, borderRadius: 10, maxHeight: '80vh' } }, body, footer))
+        return h('div', { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 2147483001, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+          h('div', { style: { background: 'var(--dsw-specific-menu, #1c1c1c)', padding: 14, borderRadius: 12, width: '100%', maxWidth: 460 } }, body, footer))
       }
-      return h(Modal, { open: true, onClose: () => writeStore({ open: false }), title: '处理同名内容', closeLabel: '取消', footer }, body)
+      return h(Modal, { open: true, onClose: () => writeStore({ open: false }), title: `处理同名内容（${remaining}）`, closeLabel: '取消', footer }, body)
     }
 
+    /** 内联样式汇总（不依赖 <style> 注入，避免被覆盖或未生效）。 */
+    const S = {
+      wrap: { position: 'relative', display: 'inline-flex', alignItems: 'center' },
+      chip: {
+        display: 'inline-flex', alignItems: 'center', gap: 4, height: 28, padding: '0 8px',
+        border: 0, borderRadius: 'var(--dsw-radius-sm, 8px)', background: 'none',
+        color: 'var(--dsw-alias-label-primary, inherit)', font: 'inherit', fontSize: 13,
+        fontWeight: 500, lineHeight: '20px', cursor: 'pointer', whiteSpace: 'nowrap',
+      },
+      menu: {
+        position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 2147483000,
+        minWidth: 196, maxWidth: 280, padding: 4, display: 'flex', flexDirection: 'column', gap: 2,
+        borderRadius: 'var(--dsw-radius-md, 10px)',
+        boxShadow: 'var(--dsw-elevation-panel, 0 8px 24px rgba(0,0,0,.32))',
+        background: 'var(--dsw-specific-menu, rgba(38,38,38,.99))',
+        backdropFilter: 'var(--dsw-menu-backdrop-filter, blur(12px))',
+        textAlign: 'left',
+      },
+      menuItem: {
+        display: 'block', width: '100%', minHeight: 32, padding: '0 10px', border: 0,
+        borderRadius: 'var(--dsw-radius-sm, 8px)', background: 'none', color: 'inherit',
+        font: 'inherit', fontSize: 13, textAlign: 'left', cursor: 'pointer', lineHeight: '32px',
+      },
+      menuHint: { padding: '2px 10px 6px', fontSize: 11, opacity: 0.55, lineHeight: 1.4 },
+      dialogBody: { maxHeight: 'min(42vh, 340px)', overflowY: 'auto', overscrollBehavior: 'contain', paddingRight: 2 },
+      toolbar: { display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 8px', flexWrap: 'wrap' },
+      row: {
+        display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0',
+        borderTop: '1px solid rgba(127,127,127,.16)',
+      },
+      fileName: { flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13 },
+      actions: { flex: 'none', display: 'flex', gap: 4 },
+      pill: {
+        minHeight: 24, padding: '0 8px', borderRadius: 'var(--dsw-radius-sm, 8px)',
+        border: '1px solid rgba(127,127,127,.32)', background: 'none', color: 'inherit',
+        font: 'inherit', fontSize: 12, cursor: 'pointer', lineHeight: '22px', whiteSpace: 'nowrap',
+      },
+      muted: { fontSize: 12, opacity: 0.6 },
+    }
+
+    /** 路径只显示文件名，完整路径放 title，行高才压得住。 */
+    function shortName(rel) {
+      const parts = String(rel).split('/')
+      return parts[parts.length - 1]
+    }
 
     /**
-     * 首页 chip + 下拉菜单（菜单样式沿用原生菜单材质变量）。
-     * 菜单项：安装 / 覆盖式安装 / 检查冲突 / 复制命令。
+     * 首页 chip + 下拉菜单（内联样式，确保生效）。
      */
     function HeroEntry() {
       const [badge, setBadge] = React.useState('')
       const [open, setOpen] = React.useState(false)
       const [busy, setBusy] = React.useState(false)
+      const [hover, setHover] = React.useState('')
       const wrapRef = React.useRef(null)
 
       React.useEffect(() => {
@@ -396,7 +371,7 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
             const n = data?.conflicts?.length ?? 0
             if (alive && n > 0) setBadge(` · ${n}`)
           } catch {
-            /* 静默：chip 不该因为检测失败而打扰 */
+            /* 静默 */
           }
         })()
         return () => {
@@ -404,16 +379,15 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
         }
       }, [])
 
-      // 点外部关闭
       React.useEffect(() => {
         if (!open) return
-        const onPointerDown = (event) => {
+        const onDown = (event) => {
           const node = wrapRef.current
           if (node !== null && node.contains(event.target)) return
           setOpen(false)
         }
-        document.addEventListener('pointerdown', onPointerDown, true)
-        return () => document.removeEventListener('pointerdown', onPointerDown, true)
+        document.addEventListener('pointerdown', onDown, true)
+        return () => document.removeEventListener('pointerdown', onDown, true)
       }, [open])
 
       const run = async (fn) => {
@@ -428,25 +402,16 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
       }
 
       const items = [
-        {
-          key: 'install',
-          label: '安装到工作区',
-          onSelect: () => detectThenInstall(HeroEntry.ctx, undefined),
-        },
+        { key: 'install', label: '安装到工作区', onSelect: () => detectThenInstall(HeroEntry.ctx, undefined) },
         {
           key: 'force',
           label: '覆盖式安装',
-          danger: true,
           onSelect: async () => {
             const { sessionId } = currentSession(HeroEntry.ctx)
             await remoteExecute(HeroEntry.ctx, sessionId, '/atp install force')
           },
         },
-        {
-          key: 'check',
-          label: '检查冲突…',
-          onSelect: () => detectThenInstall(HeroEntry.ctx, undefined),
-        },
+        { key: 'check', label: '检查冲突…', onSelect: () => detectThenInstall(HeroEntry.ctx, undefined) },
         {
           key: 'copy',
           label: '复制 /atp install',
@@ -454,7 +419,7 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
             try {
               await navigator.clipboard.writeText('/atp install')
             } catch {
-              /* 剪贴板不可用就算了 */
+              /* 剪贴板不可用时忽略 */
             }
           },
         },
@@ -463,32 +428,33 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
       const Icon = primitives?.IconChecklistOutlineRegular
       const label = busy ? '协作规程…' : `协作规程${badge}`
 
-      return h('div', { className: 'atp-wrap', ref: wrapRef },
+      return h('div', { style: S.wrap, ref: wrapRef },
         h('button', {
           type: 'button',
-          className: 'atp-chip',
+          style: { ...S.chip, background: open ? 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.16))' : 'none' },
           disabled: busy,
           'aria-label': '多智能体协作规程',
-          'aria-expanded': open,
           'aria-haspopup': 'menu',
+          'aria-expanded': open,
           onClick: () => setOpen((v) => !v),
         },
-        Icon !== undefined ? h(Icon, { className: 'atp-chip-glyph', size: 16 }) : null,
-        h('span', { className: 'atp-chip-label' }, label),
-        h('span', { className: 'atp-chip-glyph', style: { fontSize: 10 } }, '▾')),
+        Icon !== undefined ? h(Icon, { size: 16, style: { flex: 'none' } }) : null,
+        h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, label),
+        h('span', { style: { fontSize: 10, opacity: 0.7 } }, '▾')),
 
         open
-          ? h('div', { className: 'atp-menu', role: 'menu' },
+          ? h('div', { style: S.menu, role: 'menu' },
               ...items.map((item) =>
                 h('button', {
                   key: item.key,
                   type: 'button',
                   role: 'menuitem',
-                  className: 'atp-menu-item',
-                  'data-danger': item.danger === true ? 'true' : undefined,
+                  style: { ...S.menuItem, background: hover === item.key ? 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.18))' : 'none' },
+                  onMouseEnter: () => setHover(item.key),
+                  onMouseLeave: () => setHover(''),
                   onClick: () => void run(item.onSelect),
                 }, item.label)),
-              h('div', { className: 'atp-menu-hint' }, '覆盖式安装会先把你的原件暂存，失败可回滚'))
+              h('div', { style: S.menuHint }, '覆盖式安装会先把原件暂存，失败可回滚'))
           : null)
     }
 
@@ -558,15 +524,16 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
         )
         if (conflicts.length > 0) {
           children.push(
-            h('div', { key: 'conf', style: { marginTop: 8, marginBottom: 4, color: 'var(--dsh-warning, #b8862b)' } },
-              `检测到 ${conflicts.length} 处同名内容（不会被自动覆盖）：`),
+            h('div', { key: 'conf', style: { marginTop: 8, marginBottom: 4, color: 'var(--dsw-alias-label-warning, #b8862b)' } },
+              `${conflicts.length} 处同名内容（不会被自动覆盖）`),
           )
-          conflicts.forEach((c, i) => {
-            children.push(
-              h('div', { key: `c${i}`, style: { paddingLeft: 12, margin: '2px 0' } },
-                `${i + 1}. ${c.rel} — ${c.reason}`),
-            )
-          })
+          // 只列前 5 条，其余收进一行，避免面板被长列表撑开
+          children.push(...conflicts.slice(0, 5).map((c, i) =>
+            h('div', { key: `c${i}`, style: { paddingLeft: 4, margin: '1px 0', ...S.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, title: c.rel },
+              `${i + 1}. ${shortName(c.rel)}`)))
+          if (conflicts.length > 5) {
+            children.push(h('div', { key: 'more', style: { paddingLeft: 4, ...S.muted } }, `…另有 ${conflicts.length - 5} 项，点「逐项处理冲突…」查看全部`))
+          }
           children.push(
             h('div', { key: 'resolve', style: { marginTop: 8 } },
               typeof Button === 'function'

@@ -1,6 +1,6 @@
 {
   "name": "dsh-agent-team-playbook",
-  "version": "1.31.0",
+  "version": "1.31.1",
   "description": "DeepSeek Harness plugin that brings an executable multi-agent collaboration workflow (charter, triage tiers, six-stage pipeline, audit gates, experience library): a read-only /agent-team command plus a collision-aware installer for the documents.",
   "type": "module",
   "license": "MIT",
