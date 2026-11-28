@@ -18,10 +18,11 @@
 import { createInterface } from 'node:readline/promises'
 import os from 'node:os'
 import { stdin, stdout } from 'node:process'
-import { readFile, writeFile, mkdir, stat, readdir, rename, rm, rmdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { installAtomic, scan, listFiles, CORE_FILE, DOCS_DIR } from '../lib/install.js'
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -31,10 +32,6 @@ process.stdout.on('error', (err) => {
   throw err
 })
 const SOURCE_ROOT = path.join(PACKAGE_ROOT, 'playbook')
-
-/** 会被安装进用户项目的条目：playbook 本体（核心 + 分册）。 */
-const ROOT_FILE = 'AGENTS.md'
-const ROOT_DIR = 'docs'
 
 const C = {
   dim: (s) => `\x1b[2m${s}\x1b[0m`,
@@ -116,70 +113,9 @@ ${C.bold('行为')}
 `)
 }
 
-/** 递归列出源目录下所有文件，返回相对 SOURCE_ROOT 的 posix 路径。 */
-async function walk(relDir) {
-  const abs = path.join(SOURCE_ROOT, relDir)
-  const out = []
-  let entries
-  try {
-    entries = await readdir(abs, { withFileTypes: true })
-  } catch {
-    return out
-  }
-  for (const entry of entries) {
-    const rel = path.posix.join(relDir, entry.name)
-    if (entry.isDirectory()) out.push(...(await walk(rel)))
-    else if (entry.isFile()) out.push(rel)
-  }
-  return out.sort()
-}
 
-/**
- * 目标路径的冲突详情。`target` 是"改已有文件名"时要动的那个路径：
- *   - 同名文件已存在 → 改名该文件
- *   - 同名位置是目录 → 改名该目录（风险高，调用处需提示）
- *   - 上级是文件导致建不了目录 → 改名那个上级文件
- */
-async function inspectConflict(destAbs) {
-  if (existsSync(destAbs)) {
-    const s = await stat(destAbs)
-    return s.isDirectory()
-      ? { reason: '同名位置已是目录', kind: 'dir', target: destAbs }
-      : { reason: '文件已存在', kind: 'file', target: destAbs }
-  }
-  let p = path.dirname(destAbs)
-  while (p && p !== path.dirname(p)) {
-    if (existsSync(p)) {
-      const s = await stat(p)
-      if (!s.isDirectory()) return { reason: `上级 ${path.basename(p)} 是文件，无法创建目录`, kind: 'parent-file', target: p }
-      break
-    }
-    p = path.dirname(p)
-  }
-  return null
-}
 
-/** 生成不冲突的备份路径。 */
-function uniqueBackupPath(target, suffix) {
-  let to = `${target}${suffix}`
-  let i = 1
-  while (existsSync(to)) to = `${target}${suffix}-${i++}`
-  return to
-}
 
-/** 把引用改写应用到文本内容：先改目录前缀，再改根文件名。 */
-function rewriteReferences(text, renames) {
-  let out = text
-  for (const { from, to } of renames) {
-    if (from === 'AGENTS.md') {
-      // 仅替换独立出现的文件名（前后不是路径分隔或字母数字）
-      out = out.replace(/(^|[^/\w.-])AGENTS\.md(?![.\w-])/g, (_m, pre) => `${pre}${to}`)
-    } else {
-      out = out.split(from).join(to)
-    }
-  }
-  return out
-}
 
 /** 受管区块标记：重复执行时原地更新，绝不碰区块外内容。 */
 const BLOCK_START = '<!-- agent-team-playbook:start -->'
@@ -229,7 +165,7 @@ async function runGlobalMode(opts) {
   const coreText = await readFile(path.join(SOURCE_ROOT, 'AGENTS.md'), 'utf8')
   const block = managedBlock(destDir, opts.inlineCore, coreText)
 
-  const rels = [ROOT_FILE, ...(await walk(ROOT_DIR))]
+  const rels = [CORE_FILE, ...(await listFiles(SOURCE_ROOT, DOCS_DIR))]
   console.log(C.bold('全局安装计划'))
   console.log(C.dim(`  区块模式：${opts.inlineCore ? '内联核心全文（每轮真常驻）' : '指针（默认，agent 需先读一次文件）'}`))
   console.log(`  复制 ${rels.length} 个文件 → ${destDir}`)
@@ -308,9 +244,7 @@ async function main() {
     console.error(C.red(`✗ 找不到包内 playbook 目录：${SOURCE_ROOT}`))
     process.exit(1)
   }
-  if (opts.global) {
-    return runGlobalMode(opts)
-  }
+  if (opts.global) return runGlobalMode(opts)
 
   if (!existsSync(opts.dir)) {
     console.error(C.red(`✗ 目标目录不存在：${opts.dir}`))
@@ -320,85 +254,71 @@ async function main() {
     console.error(C.red(`✗ --dir 不是目录：${opts.dir}`))
     process.exit(1)
   }
-
-  // ── 1. 组装安装单元：核心与分册是一个整体，必须同进同退 ─────────────
-  const docRels = await walk(ROOT_DIR)
-  if (docRels.length === 0) {
-    console.error(C.red(`✗ 包内缺少分册：${path.join(SOURCE_ROOT, ROOT_DIR)} 为空或不存在`))
+  if ((await listFiles(SOURCE_ROOT, DOCS_DIR)).length === 0) {
+    console.error(C.red(`✗ 包内缺少分册：${path.join(SOURCE_ROOT, DOCS_DIR)} 为空或不存在`))
     process.exit(1)
   }
-  const UNITS = [
-    { key: ROOT_FILE, kind: 'file', files: [ROOT_FILE] },
-    { key: ROOT_DIR, kind: 'dir', files: docRels },
-  ]
 
-  // ── 2. 冲突检测（按单元归并） ──────────────────────────────────────
-  const conflicts = new Map()
-  for (const u of UNITS) {
-    for (const rel of u.files) {
-      const c = await inspectConflict(path.join(opts.dir, rel))
-      if (c === null) continue
-      if (!conflicts.has(u.key)) conflicts.set(u.key, { kind: u.kind, targets: new Set(), files: [], reasons: new Set() })
-      const entry = conflicts.get(u.key)
-      entry.targets.add(c.target)
-      entry.files.push(rel)
-      entry.reasons.add(c.reason)
-    }
+  // ── 1. 扫描冲突（核心 + 分册是一个不可分单元） ────────────────────
+  const { conflicts } = await scan({ sourceRoot: SOURCE_ROOT, targetDir: opts.dir })
+  const byUnit = new Map()
+  for (const c of conflicts) {
+    if (!byUnit.has(c.unit)) byUnit.set(c.unit, { reasons: new Set(), targets: new Set(), count: 0 })
+    const e = byUnit.get(c.unit)
+    e.reasons.add(c.reason)
+    e.targets.add(c.target)
+    e.count += 1
   }
 
-  if (conflicts.size === 0) {
+  if (conflicts.length === 0) {
     console.log(C.green('✓ 目标目录没有同名内容，直接安装（核心 + 分册一起）。'))
   } else {
     console.log(C.yellow('⚠ 检测到冲突（核心与分册必须一起装，所以下面整体决策）：'))
-    for (const [key, info] of conflicts) {
-      console.log(`  · ${C.bold(key)} —— ${[...info.reasons].join('；')}，涉及 ${info.files.length} 个文件`)
+    for (const [unit, info] of byUnit) {
+      console.log(`  · ${C.bold(unit)} —— ${[...info.reasons].join('；')}，涉及 ${info.count} 个文件`)
       for (const target of info.targets) console.log(C.dim(`      已有：${path.relative(opts.dir, target)}`))
     }
   }
 
-  // ── 3. 决策（只有"整体"的选项，不存在装一半） ──────────────────────
-  const renames = [] // 我们这侧的改名（会同步改写引用）
-  const existingRenames = [] // 已有项改名备份
+  // ── 2. 决策 ────────────────────────────────────────────────────────
+  const renames = []
   const defaultSuffix = `.bak-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}`
+  let onConflict = 'overwrite'
+  let backupSuffix
   let install = true
   const interactive = stdin.isTTY && stdout.isTTY
 
-  const backupAll = (suffix) => {
-    for (const [, info] of conflicts) {
-      for (const target of info.targets) {
-        existingRenames.push({ from: target, to: uniqueBackupPath(target, suffix) })
-      }
-    }
-  }
-
-  // 非交互显式改名：只要每个冲突单元都被覆盖，就不再提问
+  // 非交互显式改名
   if (opts.renameCore !== undefined) {
-    if (!/^[^/\\]+$/.test(opts.renameCore)) { console.error(C.red('✗ --rename-core 不能含路径分隔符')); process.exit(1) }
-    if (opts.renameCore === ROOT_FILE) { console.error(C.red(`✗ --rename-core 不能与原名相同`)); process.exit(1) }
-    if (existsSync(path.join(opts.dir, opts.renameCore))) {
-      console.error(C.red(`✗ --rename-core 目标已存在：${opts.renameCore}`)); process.exit(1)
+    if (!/^[^/\\]+$/.test(opts.renameCore) || opts.renameCore === CORE_FILE) {
+      console.error(C.red('✗ --rename-core 非法（不能含路径分隔符，也不能与原名相同）'))
+      process.exit(1)
     }
-    renames.push({ from: ROOT_FILE, to: opts.renameCore })
+    if (existsSync(path.join(opts.dir, opts.renameCore))) {
+      console.error(C.red(`✗ --rename-core 目标已存在：${opts.renameCore}`))
+      process.exit(1)
+    }
+    renames.push({ from: CORE_FILE, to: opts.renameCore })
   }
   if (opts.renameDocs !== undefined) {
-    if (!/^[^/\\]+$/.test(opts.renameDocs)) { console.error(C.red('✗ --rename-docs 不能含路径分隔符')); process.exit(1) }
-    if (opts.renameDocs === ROOT_DIR) { console.error(C.red(`✗ --rename-docs 不能与原名相同`)); process.exit(1) }
-    if (existsSync(path.join(opts.dir, opts.renameDocs))) {
-      console.error(C.red(`✗ --rename-docs 目标已存在：${opts.renameDocs}`)); process.exit(1)
+    if (!/^[^/\\]+$/.test(opts.renameDocs) || opts.renameDocs === DOCS_DIR) {
+      console.error(C.red('✗ --rename-docs 非法（不能含路径分隔符，也不能与原名相同）'))
+      process.exit(1)
     }
-    renames.push({ from: `${ROOT_DIR}/`, to: `${opts.renameDocs}/` })
+    if (existsSync(path.join(opts.dir, opts.renameDocs))) {
+      console.error(C.red(`✗ --rename-docs 目标已存在：${opts.renameDocs}`))
+      process.exit(1)
+    }
+    renames.push({ from: `${DOCS_DIR}/`, to: `${opts.renameDocs}/` })
   }
-  const unresolved = [...conflicts.keys()].filter(
-    (k) => !renames.some((r) => (k === ROOT_FILE ? r.from === ROOT_FILE : r.from === `${ROOT_DIR}/`)),
+  if (renames.length > 0) {
+    console.log(C.dim(`  按 --rename-* 处理：${renames.map((r) => `${r.from} → ${r.to}`).join('，')}`))
+  }
+
+  // 未被改名覆盖的冲突才需要决策
+  const unresolved = conflicts.filter(
+    (c) => !renames.some((r) => (c.unit === CORE_FILE ? r.from === CORE_FILE : r.from === `${DOCS_DIR}/`)),
   )
-  // 显式改名时提示一下（用户可能以为必须冲突才会改名）
-  for (const r of renames) {
-    if (r.from === ROOT_FILE && !conflicts.has(ROOT_FILE)) console.log(C.dim(`  --rename-core：核心将装成 ${r.to}（原路径未冲突，仍按你的要求改名）`))
-    if (r.from === `${ROOT_DIR}/` && !conflicts.has(ROOT_DIR)) console.log(C.dim(`  --rename-docs：分册将装到 ${r.to}/（原路径未冲突，仍按你的要求改名）`))
-  }
-  if (conflicts.size > 0 && unresolved.length === 0) {
-    console.log(C.dim(`  已按 --rename-* 处理全部冲突：${renames.map((r) => `${r.from} → ${r.to}`).join('，')}`))
-  }
 
   if (unresolved.length > 0) {
     if (opts.force) {
@@ -407,7 +327,8 @@ async function main() {
       install = false
       console.log(C.dim('  --skip-conflicts：整体跳过（不会只装一半）'))
     } else if (opts.backupExisting) {
-      backupAll(defaultSuffix)
+      onConflict = 'backup'
+      backupSuffix = defaultSuffix
       console.log(C.dim(`  --backup-existing：已有冲突项改名为 *${defaultSuffix} 后安装`))
     } else if (!interactive) {
       console.error(C.red('\n✗ 非交互环境下检测到冲突，已中止（不会静默覆盖，也不会只装一半）。'))
@@ -432,20 +353,20 @@ async function main() {
             console.error(C.red('  后缀只能含字母数字点下划线横线，已中止。'))
             process.exit(1)
           }
-          backupAll(suffix)
+          onConflict = 'backup'
+          backupSuffix = suffix
         } else if (answer === 'r') {
-          // 只对我们这侧改名：逐个冲突单元问
-          for (const key of conflicts.keys()) {
-            const suggestion = key === ROOT_DIR ? 'docs-playbook' : 'AGENTS.team.md'
-            const raw = (await rl.question(`  ${key} 的新名字（默认 ${suggestion}）> `)).trim() || suggestion
+          for (const unit of new Set(unresolved.map((c) => c.unit))) {
+            const suggestion = unit === DOCS_DIR ? 'docs-playbook' : 'AGENTS.team.md'
+            const raw = (await rl.question(`  ${unit} 的新名字（默认 ${suggestion}）> `)).trim() || suggestion
             const clean = raw.replace(/[/\\]/g, '-')
-            if (clean === path.basename(key) || clean === '') {
+            if (clean === path.basename(unit) || clean === '') {
               console.error(C.red('  名字未变化，已中止。'))
               process.exit(1)
             }
-            if (key === ROOT_DIR) renames.push({ from: `${key}/`, to: `${clean}/` })
-            else renames.push({ from: key, to: clean })
-            console.log(C.dim(`  → ${key} 将安装为 ${clean}，文档内引用同步改写`))
+            if (unit === DOCS_DIR) renames.push({ from: `${unit}/`, to: `${clean}/` })
+            else renames.push({ from: unit, to: clean })
+            console.log(C.dim(`  → ${unit} 将安装为 ${clean}，文档内引用同步改写`))
           }
         } else if (answer === 's') {
           install = false
@@ -464,146 +385,38 @@ async function main() {
     return
   }
 
-  // ── 4. 生成最终计划（改名会同步改写引用） ──────────────────────────
-  const plan = []
-  for (const u of UNITS) {
-    for (const rel of u.files) {
-      let finalRel = rel
-      for (const r of renames) {
-        if (r.from === ROOT_FILE) {
-          if (finalRel === ROOT_FILE) finalRel = r.to
-        } else if (finalRel.startsWith(r.from)) {
-          finalRel = r.to + finalRel.slice(r.from.length)
-        }
-      }
-      plan.push({ srcRel: rel, finalRel })
-    }
-  }
-
-  const refRenames = renames.map(({ from, to }) => ({ from, to }))
-  console.log(`\n${C.bold('安装计划')}${opts.dryRun ? C.dim('（--dry-run，不会写入）') : ''}  —— 共 ${plan.length} 个文件，整体生效`)
-  for (const item of plan.slice(0, 3)) console.log(`  ${C.dim('新增')}  ${item.finalRel}`)
-  if (plan.length > 6) console.log(C.dim(`  …… 中间 ${plan.length - 6} 个文件省略……`))
-  for (const item of plan.slice(-3)) console.log(`  ${C.dim('新增')}  ${item.finalRel}`)
-  if (refRenames.length > 0) console.log(C.dim(`引用同步改写：${refRenames.map((r) => `${r.from} → ${r.to}`).join('，')}`))
-  if (existingRenames.length > 0) {
-    console.log(C.dim(`已有项改名：${existingRenames.map((r) => `${path.relative(opts.dir, r.from)} → ${path.relative(opts.dir, r.to)}`).join('，')}`))
-  }
+  // ── 3. 预览 ────────────────────────────────────────────────────────
+  const preview = renames.length > 0 ? `（改名：${renames.map((r) => `${r.from} → ${r.to}`).join('，')}）` : ''
+  console.log(`\n${C.bold('安装计划')}${opts.dryRun ? C.dim('（--dry-run，不会写入）') : ''}${C.dim(preview)}`)
+  console.log(C.dim(`  ${CORE_FILE} + ${DOCS_DIR}/ 作为整体一起安装；冲突策略：${onConflict}${backupSuffix ? `（后缀 ${backupSuffix}）` : ''}`))
 
   if (opts.dryRun) {
     console.log(C.dim('\n（dry-run 结束，未写入任何文件）'))
     return
   }
 
-  // ── 5. 暂存 → 提交 → 失败回滚（保证要么全有、要么全无） ─────────────
-  const stageRoot = path.join(opts.dir, `.atp-stage-${process.pid}-${Date.now()}`)
-  const stashRoot = path.join(stageRoot, '.rollback')
-  const committed = []
-  const madeDirs = []
-  const doneBackups = []
-  const stashed = [] // 被覆盖的原件：安装失败时还原
+  // ── 4. 原子安装（暂存 → 提交 → 失败回滚） ────────────────────────
+  const result = await installAtomic({
+    sourceRoot: SOURCE_ROOT,
+    targetDir: opts.dir,
+    onConflict,
+    renames,
+    backupSuffix,
+  })
 
-  const cleanupStage = async () => {
-    await rm(stageRoot, { recursive: true, force: true }).catch(() => {})
-  }
-
-  const rollback = async () => {
-    for (const f of committed.reverse()) {
-      await rm(f, { force: true, recursive: true }).catch(() => {})
+  if (!result.ok) {
+    if (result.code === 'conflict') {
+      console.error(C.red(`\n✗ 失败：${result.message}`))
+      process.exit(1)
     }
-    for (const s of stashed.reverse()) {
-      await mkdir(path.dirname(s.from), { recursive: true }).catch(() => {})
-      await rename(s.to, s.from).catch(() => {})
-    }
-    for (const r of doneBackups.reverse()) {
-      await rename(r.to, r.from).catch(() => {})
-    }
-    for (const d of madeDirs.reverse()) {
-      await rmdir(d).catch(() => {})
-    }
-    await cleanupStage()
-  }
-
-  try {
-    // 5.1 全部写进暂存目录（此时用户目录还没被改动）
-    for (const item of plan) {
-      const dest = path.join(stageRoot, item.finalRel)
-      await mkdir(path.dirname(dest), { recursive: true })
-      const srcAbs = path.join(SOURCE_ROOT, item.srcRel)
-      const isText = /\.(md|svg|txt|yml|yaml|json)$/i.test(item.srcRel)
-      if (isText && refRenames.length > 0) {
-        await writeFile(dest, rewriteReferences(await readFile(srcAbs, 'utf8'), refRenames), 'utf8')
-      } else {
-        await writeFile(dest, await readFile(srcAbs))
-      }
-    }
-
-    // 5.2 备份"已有项"（改名腾出原路径）
-    for (const r of existingRenames) {
-      await mkdir(path.dirname(r.to), { recursive: true })
-      await rename(r.from, r.to)
-      doneBackups.push(r)
-    }
-
-    // 5.3 覆盖前先"暂存"原件：这样即使后面失败，也能原样还原，不会丢用户数据
-    const planDestSet = new Set(plan.map((i) => path.join(opts.dir, i.finalRel)))
-    for (const [, info] of conflicts) {
-      for (const target of info.targets) {
-        if (!existsSync(target)) continue // 已被 [e] 备份走
-        if (!planDestSet.has(target)) continue // 我们改了自己的名字，没占用这个路径 → 不动用户文件
-        const rel = path.relative(opts.dir, target)
-        const to = path.join(stashRoot, rel)
-        await mkdir(path.dirname(to), { recursive: true })
-        await rename(target, to)
-        stashed.push({ from: target, to })
-      }
-    }
-
-    // 5.4 提交：逐个 rename 到最终位置
-    for (const item of plan) {
-      const dest = path.join(opts.dir, item.finalRel)
-      if (!dest.startsWith(opts.dir + path.sep)) throw new Error(`拒绝写入目标目录之外：${dest}`)
-      let dir = path.dirname(dest)
-      const missingDirs = []
-      while (!existsSync(dir)) {
-        missingDirs.unshift(dir)
-        const parent = path.dirname(dir)
-        if (parent === dir) break
-        dir = parent
-      }
-      for (const d of missingDirs) {
-        await mkdir(d)
-        madeDirs.push(d)
-      }
-      await rename(path.join(stageRoot, item.finalRel), dest)
-      committed.push(dest)
-      // 仅测试用故障注入：验证"中途失败也能完整回滚"
-      const failAfter = Number(process.env.ATP_FAIL_AFTER_COMMITS ?? 0)
-      if (failAfter > 0 && committed.length === failAfter) {
-        throw new Error(`injected failure after ${failAfter} commits (ATP_FAIL_AFTER_COMMITS)`)
-      }
-    }
-
-    // 5.5 校验：所有文件都在位，且核心与分册都不缺
-    const missingAfter = plan.filter((i) => !existsSync(path.join(opts.dir, i.finalRel)))
-    if (missingAfter.length > 0) {
-      throw new Error(`提交后缺少 ${missingAfter.length} 个文件：${missingAfter.map((i) => i.finalRel).join(', ')}`)
-    }
-    const coreRelFinal = plan.find((i) => i.srcRel === ROOT_FILE)?.finalRel
-    const docRelFinal = plan.find((i) => i.srcRel === `${ROOT_DIR}/workflow/rules/03-流水线.md`)?.finalRel
-    if (coreRelFinal === undefined || docRelFinal === undefined || !existsSync(path.join(opts.dir, coreRelFinal)) || !existsSync(path.join(opts.dir, docRelFinal))) {
-      throw new Error('核心与分册没有同时落地')
-    }
-  } catch (error) {
-    console.error(C.red(`\n✗ 安装失败，正在回滚：${error.message}`))
-    await rollback()
-    console.error(C.red('  已回滚到安装前状态，未留下半成品。'))
+    console.error(C.red(`\n✗ 安装失败，已回滚到安装前状态：${result.message}`))
     process.exit(1)
   }
 
-  await cleanupStage()
-  console.log(C.green(`\n✓ 完成：${plan.length} 个文件已原子安装到 ${opts.dir}`))
-  if (existingRenames.length > 0) console.log(C.yellow(`  你的原文件已保留为：${existingRenames.map((r) => path.relative(opts.dir, r.to)).join('，')}`))
+  console.log(C.green(`\n✓ 完成：${result.installed.length} 个文件已原子安装到 ${opts.dir}`))
+  if (result.backups.length > 0) {
+    console.log(C.yellow(`  你的原文件已保留为：${result.backups.map((b) => path.relative(opts.dir, b.to)).join('，')}`))
+  }
   console.log(C.dim('  提示：若项目已有自己的协作规则，建议把它们合并进新的 AGENTS.md，而不是两份并存。'))
 }
 
