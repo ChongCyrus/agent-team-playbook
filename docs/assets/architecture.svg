@@ -179,14 +179,15 @@
 
   <!-- S5 -->
   <rect x="942" y="598" width="120" height="140" rx="9" fill="#f3f8fd" stroke="#9dbfdd"/>
-  <text x="954" y="618" font-size="11" font-weight="700" fill="#14375c">S5 · 门禁→真机</text>
-  <text x="954" y="637" font-size="9.2" font-weight="700" fill="#1f5a8f">A CI/CD 门禁</text>
-  <text x="954" y="653" font-size="9" fill="#274259">· 构建/lint/回归</text>
-  <text x="954" y="668" font-size="9" fill="#274259">· 绿了才进 B</text>
-  <text x="954" y="686" font-size="9.2" font-weight="700" fill="#1f5a8f">B 真机验证</text>
-  <text x="954" y="702" font-size="9" fill="#274259">· 真实环境/数据</text>
-  <text x="954" y="717" font-size="9" fill="#274259">· 端到端走路径</text>
-  <text x="954" y="732" font-size="8.8" fill="#8a9bad">失败按层级回环</text>
+  <text x="954" y="618" font-size="10.5" font-weight="700" fill="#14375c">S5 · 门禁 ∥ 真机</text>
+  <text x="954" y="632" font-size="8.5" fill="#a8442a">可并行 · 判定 AND</text>
+  <text x="954" y="648" font-size="9.2" font-weight="700" fill="#1f5a8f">A CI/CD 门禁</text>
+  <text x="954" y="662" font-size="8.8" fill="#274259">· 构建/lint/回归</text>
+  <text x="954" y="675" font-size="8.8" fill="#274259">· 机器判定</text>
+  <text x="954" y="691" font-size="9.2" font-weight="700" fill="#1f5a8f">B 真机验证</text>
+  <text x="954" y="705" font-size="8.8" fill="#274259">· 真实环境/数据</text>
+  <text x="954" y="718" font-size="8.8" fill="#274259">· 体验判断</text>
+  <text x="954" y="731" font-size="8.3" fill="#8a9bad">须同一版本</text>
 
   <!-- S6 -->
   <rect x="1078" y="598" width="104" height="140" rx="9" fill="#eefaf2" stroke="#7fbf98"/>
