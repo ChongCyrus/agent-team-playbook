@@ -96,14 +96,14 @@ docs/workflow/practices/   经验与做法库
 dsh plugin --profile web add dsh-agent-team-playbook
 ```
 
-装好后多一个只读命令：
+装好后多一个只读命令 `/atp`（agent-team-playbook 的缩写；取名短而少见，因为 DSH 对重名命令是硬报错）：
 
 | 命令 | 作用 |
 |---|---|
-| `/agent-team` | 规程摘要（档位、四问、收尾三问）+ 安装方式 |
-| `/agent-team core` | 输出核心全文，读完即在本轮按它协作 |
-| `/agent-team paths` | 各分册的绝对路径，按需查阅 |
-| `/agent-team help` | 用法 |
+| `/atp` | 规程摘要（档位、四问、收尾三问）+ 安装方式 |
+| `/atp core` | 输出核心全文，读完即在本轮按它协作 |
+| `/atp paths` | 各分册的绝对路径，按需查阅 |
+| `/atp help` | 用法 |
 
 插件**不写任何文件**、也**不挂 skill**——skill 的目录摘要会常驻占用上下文（约 300 tokens/轮），而分册本来就不会自动进上下文，用命令按需取更划算。
 

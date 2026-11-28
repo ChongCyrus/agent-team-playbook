@@ -2,21 +2,23 @@
 /**
  * dsh-agent-team-playbook CLI
  *
- * 插件安装本身**不写用户任何文件**（skill 是只读挂载）。本命令是唯一的写文件入口，
+ * 插件安装本身**不写用户任何文件**（插件只注册只读命令）。本命令是唯一的写文件入口，
  * 因此它必须对"覆盖用户已有文件"这件事极其保守：
  *
- *   - 每个冲突都单独询问：覆盖 / 改名 / 跳过 / 剩余全部覆盖 / 中止
- *   - 选"改名"时，写出的文件里对它的引用一并改写，不留断链
- *   - 非交互环境（CI / 管道）遇到冲突默认中止，必须显式 --force 或 --skip-conflicts
+ *   - 每个冲突都单独询问：覆盖已有 / 改名已有（备份你的文件） / 改名我们的 / 跳过 / 中止
+ *   - 选「改名我们的」时，写出的文件里对它的引用一并改写，不留断链
+ *   - 选「改名已有」时，你的原文件被加上后缀保留，我们占用原路径
+ *   - 非交互环境遇到冲突默认中止，必须显式 --force / --skip-conflicts / --backup-existing
  *
  * 用法：
  *   npx dsh-agent-team-playbook init [--dir <目标目录>] [--dry-run]
- *                                     [--force | --skip-conflicts]
+ *         [--force | --skip-conflicts | --backup-existing]
+ *   npx dsh-agent-team-playbook init --global [--inline-core] [--yes] [--dry-run]
  */
 import { createInterface } from 'node:readline/promises'
 import os from 'node:os'
 import { stdin, stdout } from 'node:process'
-import { readFile, writeFile, mkdir, stat, readdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, stat, readdir, rename } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,7 +32,7 @@ process.stdout.on('error', (err) => {
 })
 const SOURCE_ROOT = path.join(PACKAGE_ROOT, 'playbook')
 
-/** 会被安装进用户项目的条目：playbook 本体，不含 SKILL.md（那是 skill 入口）与同步清单。 */
+/** 会被安装进用户项目的条目：playbook 本体（核心 + 分册）。 */
 const ROOT_FILE = 'AGENTS.md'
 const ROOT_DIR = 'docs'
 
@@ -52,6 +54,7 @@ function parseArgs(argv) {
     global: false,
     yes: false,
     inlineCore: false,
+    backupExisting: false,
   }
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i]
@@ -62,6 +65,7 @@ function parseArgs(argv) {
     else if (a === '--global' || a === '-g') opts.global = true
     else if (a === '--yes' || a === '-y') opts.yes = true
     else if (a === '--inline-core') opts.inlineCore = true
+    else if (a === '--backup-existing') opts.backupExisting = true
     else if (a === '--help' || a === '-h') opts.help = true
     else if (a === 'init') continue
     else {
@@ -86,6 +90,7 @@ ${C.bold('选项')}
                       默认只写指针（约 200 tokens，agent 需先读一次文件）
   --yes, -y           非交互确认（--global 追加区块用）
   --dry-run           只显示计划，不写任何文件
+  --backup-existing   冲突时把已有项改名为 *<后缀>，再装我们的（不询问）
   --force, -f         冲突时全部覆盖（不询问）
   --skip-conflicts    冲突时全部跳过（不询问）
   -h, --help          显示本帮助
@@ -98,7 +103,8 @@ ${C.bold('两种安装方式的区别（重要）')}
     适用于"本机所有项目都按这套规程走"。
 
 ${C.bold('行为')}
-  · 交互模式下，每个冲突单独询问：覆盖 / 改名 / 跳过 / 剩余全部覆盖 / 中止
+  · 交互模式下，每个冲突单独询问：
+      覆盖已有 / 改名已有（备份你的文件） / 改名我们的 / 跳过 / 剩余全部覆盖 / 中止
   · 选"改名"时，文档里对它的引用会同步改写
   · 非交互模式（管道、CI）遇到冲突默认中止，不会静默覆盖
 `)
@@ -122,23 +128,37 @@ async function walk(relDir) {
   return out.sort()
 }
 
-/** 目标路径当前是否被占用（含"父级是文件"这种无法创建目录的情况）。 */
-async function describeConflict(destAbs) {
+/**
+ * 目标路径的冲突详情。`target` 是"改已有文件名"时要动的那个路径：
+ *   - 同名文件已存在 → 改名该文件
+ *   - 同名位置是目录 → 改名该目录（风险高，调用处需提示）
+ *   - 上级是文件导致建不了目录 → 改名那个上级文件
+ */
+async function inspectConflict(destAbs) {
   if (existsSync(destAbs)) {
     const s = await stat(destAbs)
-    return s.isDirectory() ? '目录已存在' : '文件已存在'
+    return s.isDirectory()
+      ? { reason: '同名位置已是目录', kind: 'dir', target: destAbs }
+      : { reason: '文件已存在', kind: 'file', target: destAbs }
   }
-  // 逐级检查父目录是否是文件
   let p = path.dirname(destAbs)
   while (p && p !== path.dirname(p)) {
     if (existsSync(p)) {
       const s = await stat(p)
-      if (!s.isDirectory()) return `上级 ${path.basename(p)} 是文件，无法创建目录`
+      if (!s.isDirectory()) return { reason: `上级 ${path.basename(p)} 是文件，无法创建目录`, kind: 'parent-file', target: p }
       break
     }
     p = path.dirname(p)
   }
   return null
+}
+
+/** 生成不冲突的备份路径。 */
+function uniqueBackupPath(target, suffix) {
+  let to = `${target}${suffix}`
+  let i = 1
+  while (existsSync(to)) to = `${target}${suffix}-${i++}`
+  return to
 }
 
 /** 把引用改写应用到文本内容：先改目录前缀，再改根文件名。 */
@@ -177,7 +197,6 @@ function managedBlock(destAbs, inlineCore, coreText) {
 
   // 内联：核心全文进区块；相对路径改写为绝对路径，保证在任意工作区都能读到
   const rewritten = coreText
-    .replace(/\(^\)/, '') // 不裁剪开头
     .replace(/(^|[^/\w.-])AGENTS\.md(?![.\w-])/g, (_m, pre) => `${pre}${destAbs}/AGENTS.md`)
     .split('docs/').join(`${destAbs}/docs/`)
 
@@ -215,7 +234,7 @@ async function runGlobalMode(opts) {
     existing = await readFile(instrFile, 'utf8')
     const hasBlock = existing.includes(BLOCK_START)
     console.log(
-      C.dim(`  ${instrFile} 已存在（${existing.length} 字节），`) +
+      C.dim(`  ${instrFile} 已存在（${existing.length} 字符），`) +
         (hasBlock ? C.green('检测到本插件的受管区块 → 原地更新') : C.yellow('没有受管区块 → 需追加')),
     )
     if (!hasBlock && !opts.yes && !opts.force) {
@@ -291,19 +310,31 @@ async function main() {
     console.error(C.red(`✗ 目标目录不存在：${opts.dir}`))
     process.exit(1)
   }
+  if (!(await stat(opts.dir)).isDirectory()) {
+    console.error(C.red(`✗ --dir 不是目录：${opts.dir}`))
+    process.exit(1)
+  }
 
   // ── 1. 组装安装计划 ───────────────────────────────────────────────
   const files = [{ rel: ROOT_FILE, group: ROOT_FILE }]
-  for (const rel of await walk(ROOT_DIR)) files.push({ rel, group: ROOT_DIR })
+  const docRels = await walk(ROOT_DIR)
+  if (docRels.length === 0) {
+    console.error(C.red(`✗ 包内缺少分册：${path.join(SOURCE_ROOT, ROOT_DIR)} 为空或不存在`))
+    process.exit(1)
+  }
+  for (const rel of docRels) files.push({ rel, group: ROOT_DIR })
 
   // ── 2. 检测冲突（按 group 归并，避免逐文件轰炸式提问） ──────────────
   const groups = new Map()
   for (const f of files) {
     const dest = path.join(opts.dir, f.rel)
-    const reason = await describeConflict(dest)
-    if (reason === null) continue
-    if (!groups.has(f.group)) groups.set(f.group, { reason, files: [] })
-    groups.get(f.group).files.push(f.rel)
+    const c = await inspectConflict(dest)
+    if (c === null) continue
+    if (!groups.has(f.group)) groups.set(f.group, { reason: c.reason, kind: c.kind, targets: new Set(), files: [] })
+    const g = groups.get(f.group)
+    g.targets.add(c.target)
+    g.kind = g.kind === 'dir' ? 'dir' : c.kind
+    g.files.push(f.rel)
   }
 
   if (groups.size === 0) {
@@ -312,6 +343,7 @@ async function main() {
     console.log(C.yellow(`⚠ 检测到 ${groups.size} 处冲突：`))
     for (const [g, info] of groups) {
       console.log(`  · ${C.bold(g)} —— ${info.reason}，影响 ${info.files.length} 个文件`)
+      for (const target of info.targets) console.log(C.dim(`      已有：${path.relative(opts.dir, target)}`))
     }
   }
 
@@ -319,6 +351,9 @@ async function main() {
   const renames = []
   const skipped = new Set()
   const overwrite = new Set()
+  /** 被改名的"已有文件/目录"：{from, to}。安装后原路径归我们使用。 */
+  const existingRenames = []
+  const defaultSuffix = `.bak-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}`
 
   const interactive = stdin.isTTY && stdout.isTTY
 
@@ -329,9 +364,18 @@ async function main() {
     } else if (opts.skipConflicts) {
       for (const g of groups.keys()) skipped.add(g)
       console.log(C.dim('  --skip-conflicts：全部跳过'))
+    } else if (opts.backupExisting) {
+      for (const [g, info] of groups) {
+        for (const target of info.targets) {
+          const to = uniqueBackupPath(target, defaultSuffix)
+          existingRenames.push({ from: target, to, group: g })
+        }
+        overwrite.add(g)
+      }
+      console.log(C.dim(`  --backup-existing：已有冲突项将改名为 *${defaultSuffix}`))
     } else if (!interactive) {
       console.error(C.red('\n✗ 非交互环境下检测到冲突，已中止（不会静默覆盖）。'))
-      console.error('  可选：--force 全部覆盖，或 --skip-conflicts 全部跳过，或手动指定 --dir。')
+      console.error('  可选：--force 全部覆盖｜--skip-conflicts 全部跳过｜--backup-existing 备份已有项后安装｜或手动指定 --dir。')
       process.exit(1)
     } else {
       const rl = createInterface({ input: stdin, output: stdout })
@@ -346,14 +390,34 @@ async function main() {
           console.log(`\n${C.bold('冲突：')}${g}${isDir ? '（目录）' : ''}`)
           const answer = (
             await rl.question(
-              `  ${C.bold('[o]')} 覆盖   ${C.bold('[r]')} 改名   ${C.bold('[s]')} 跳过   ${C.bold('[a]')} 剩余全部覆盖   ${C.bold('[q]')} 中止 > `,
+              `  ${C.bold('[o]')} 覆盖已有   ${C.bold('[e]')} 改名已有   ${C.bold('[r]')} 改名我们的   ${C.bold('[s]')} 跳过   ${C.bold('[a]')} 剩余全部覆盖   ${C.bold('[q]')} 中止 > `,
             )
           )
             .trim()
             .toLowerCase()
 
           if (answer === 'o') overwrite.add(g)
-          else if (answer === 'a') {
+          else if (answer === 'e') {
+            const targets = [...groups.get(g).targets]
+            const risky = groups.get(g).kind === 'dir'
+            if (risky) {
+              console.log(C.yellow('  ⚠ 同名位置是目录：改名后你项目里对它的引用会指向我们的版本，请自行确认。'))
+            }
+            const suffix = (await rl.question(`  给已有项加的后缀（默认 ${defaultSuffix}）> `)).trim() || defaultSuffix
+            if (!/^[.A-Za-z0-9_-]+$/.test(suffix)) {
+              console.log(C.yellow('  后缀只能含字母数字点下划线横线，按跳过处理。'))
+              skipped.add(g)
+              continue
+            }
+            for (const target of targets) {
+              const to = uniqueBackupPath(target, suffix)
+              existingRenames.push({ from: target, to, group: g })
+            }
+            overwrite.add(g)
+            for (const r of existingRenames.filter((r) => r.group === g)) {
+              console.log(C.dim(`  → ${path.relative(opts.dir, r.from)} 改名为 ${path.relative(opts.dir, r.to)}`))
+            }
+          } else if (answer === 'a') {
             overwrite.add(g)
             overwriteRest = true
           } else if (answer === 's') skipped.add(g)
@@ -410,10 +474,24 @@ async function main() {
   if (refRenames.length > 0) {
     console.log(C.dim(`\n引用同步改写：${refRenames.map((r) => `${r.from} → ${r.to}`).join('，')}`))
   }
+  if (existingRenames.length > 0) {
+    console.log(C.dim(`已有项改名：${existingRenames.map((r) => `${path.relative(opts.dir, r.from)} → ${path.relative(opts.dir, r.to)}`).join('，')}`))
+  }
 
   if (opts.dryRun) {
     console.log(C.dim('\n（dry-run 结束）'))
     return
+  }
+
+  // ── 5.5 先腾出原路径（改名已有项），再写我们的 ────────────────────
+  for (const r of existingRenames) {
+    try {
+      await mkdir(path.dirname(r.to), { recursive: true })
+      await rename(r.from, r.to)
+    } catch (error) {
+      console.error(C.red(`✗ 改名失败：${r.from} → ${r.to}（${error.message}）。后续文件未写入。`))
+      process.exit(1)
+    }
   }
 
   let written = 0

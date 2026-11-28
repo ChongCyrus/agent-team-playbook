@@ -13,5 +13,5 @@ node_modules/
 
 # npm 打包产物
 *.tgz
-# skill 同步清单（由 scripts/sync-skill.mjs 生成）
-.skill-sync.json
+# playbook 同步清单（由 scripts/sync-playbook.mjs 生成）
+.playbook-sync.json

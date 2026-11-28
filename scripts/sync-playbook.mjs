@@ -10,8 +10,8 @@
  * 绝不碰手写文件。
  *
  * 用法：
- *   node scripts/sync-skill.mjs           # 生成/更新
- *   node scripts/sync-skill.mjs --check   # 只校验，不一致则退出码 1
+ *   node scripts/sync-playbook.mjs           # 生成/更新
+ *   node scripts/sync-playbook.mjs --check   # 只校验，不一致则退出码 1
  */
 import { readFile, writeFile, mkdir, rm, readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DEST_DIR = path.join(ROOT, 'playbook')
-const MANIFEST = path.join(ROOT, '.skill-sync.json')
+const MANIFEST = path.join(ROOT, '.playbook-sync.json')
 const CHECK = process.argv.includes('--check')
 
 /** 需要同步的源文件（相对仓库根），保持目录结构以让文档内的相对引用继续有效。 */
@@ -63,7 +63,7 @@ async function readManifest() {
 }
 
 async function main() {
-  await mkdir(DEST_DIR, { recursive: true })
+  if (!CHECK) await mkdir(DEST_DIR, { recursive: true })
 
   const wanted = new Set(SOURCES)
   for (const dir of SOURCE_DIRS) {
@@ -108,12 +108,28 @@ async function main() {
   }
 
   if (CHECK) {
-    const problems = [...missing, ...drifted.map((rel) => `未同步：${rel}`)]
+    // 目标目录里不该有清单外的文件（防残留，例如已废弃的 SKILL.md）
+    const unexpected = []
+    const walkDest = async (relDir) => {
+      const abs = path.join(DEST_DIR, relDir)
+      if (!existsSync(abs)) return
+      for (const entry of await readdir(abs, { withFileTypes: true })) {
+        const rel = relDir === '' ? entry.name : path.posix.join(relDir, entry.name)
+        if (entry.isDirectory()) await walkDest(rel)
+        else if (!wanted.has(rel)) unexpected.push(rel)
+      }
+    }
+    await walkDest('')
+    const problems = [
+      ...missing,
+      ...drifted.map((rel) => `未同步：${rel}`),
+      ...unexpected.map((rel) => `多余文件：${rel}`),
+    ]
     if (stale.length > 0) problems.push(`残留：${stale.join(', ')}`)
     if (problems.length > 0) {
       console.error('✗ playbook/ 与源文档不一致：')
       for (const p of problems) console.error('  -', p)
-      console.error('  修复：node scripts/sync-skill.mjs')
+      console.error('  修复：node scripts/sync-playbook.mjs')
       process.exit(1)
     }
     console.log(`✓ playbook 内容与源文档一致（${files.length} 个文件）`)

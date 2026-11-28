@@ -1,10 +1,10 @@
 # dsh-agent-team-playbook —— DSH bundle patch
 #
-# 挂载本插件，注册只读命令 `/agent-team`：
-#   /agent-team          规程摘要 + 安装方式
-#   /agent-team core     核心全文（读完即在本轮遵循）
-#   /agent-team paths    分册绝对路径
-#   /agent-team help     用法
+# 挂载本插件，注册只读命令 `/atp`：
+#   /atp          规程摘要 + 安装方式
+#   /atp core     核心全文（读完即在本轮遵循）
+#   /atp paths    分册绝对路径
+#   /atp help     用法
 #
 # 本插件不写任何文件，也不挂载 skill：
 #   · 不挂 skill 是因为 skill 的目录摘要会常驻占用上下文（约 300 tokens/轮），
