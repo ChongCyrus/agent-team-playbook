@@ -1,0 +1,261 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 980" width="1240" height="980" font-family="'Noto Sans CJK SC','Noto Sans SC','Source Han Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei','WenQuanYi Micro Hei',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7f"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c0392b"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1e8449"/>
+    </marker>
+    <marker id="arrowWhite" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b7791f"/>
+    </marker>
+    <linearGradient id="coreGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a365d"/><stop offset="100%" stop-color="#2c5282"/>
+    </linearGradient>
+    <linearGradient id="loopGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22543d"/><stop offset="100%" stop-color="#2f855a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1240" height="980" fill="#f7f9fb"/>
+
+  <!-- 标题 -->
+  <text x="620" y="38" text-anchor="middle" font-size="24" font-weight="700" fill="#1a202c">Agent Team Playbook · 架构总览</text>
+  <text x="620" y="62" text-anchor="middle" font-size="13" fill="#5b6b7f">常驻核心 + 9 分册 · 六阶段流水线 · 问题回流 · 自反馈进化</text>
+
+  <!-- ===== 顶部：自反馈进化核心 ===== -->
+  <rect x="40" y="84" width="1160" height="164" rx="14" fill="url(#coreGrad)"/>
+  <text x="620" y="112" text-anchor="middle" font-size="16" font-weight="700" fill="#ffffff">总纲：自反馈进化环（每轮默认循环 · 全文最高原则）</text>
+
+  <g fill="#ffffff" font-size="12">
+    <rect x="70" y="128" width="140" height="44" rx="8" fill="#ffffff" opacity="0.14"/>
+    <text x="140" y="147" text-anchor="middle" font-weight="600">① 采集反馈</text>
+    <text x="140" y="163" text-anchor="middle" font-size="10.5" opacity="0.85">负面 / 正向 / 优化方向</text>
+
+    <rect x="240" y="128" width="140" height="44" rx="8" fill="#ffffff" opacity="0.14"/>
+    <text x="310" y="147" text-anchor="middle" font-weight="600">② 分类归因</text>
+    <text x="310" y="163" text-anchor="middle" font-size="10.5" opacity="0.85">五层扫描防漏</text>
+
+    <rect x="410" y="128" width="140" height="44" rx="8" fill="#ffffff" opacity="0.14"/>
+    <text x="480" y="147" text-anchor="middle" font-weight="600">③ 排序</text>
+    <text x="480" y="163" text-anchor="middle" font-size="10.5" opacity="0.85">影响 × 成本</text>
+
+    <rect x="580" y="128" width="140" height="44" rx="8" fill="#ffffff" opacity="0.14"/>
+    <text x="650" y="147" text-anchor="middle" font-weight="600">④ 先策划</text>
+    <text x="650" y="163" text-anchor="middle" font-size="10.5" opacity="0.85">不可逆→决策记录</text>
+
+    <rect x="750" y="128" width="140" height="44" rx="8" fill="#ffffff" opacity="0.14"/>
+    <text x="820" y="147" text-anchor="middle" font-weight="600">⑤ 小步验证</text>
+    <text x="820" y="163" text-anchor="middle" font-size="10.5" opacity="0.85">一次只改一类</text>
+
+    <rect x="920" y="128" width="140" height="44" rx="8" fill="#ffffff" opacity="0.14"/>
+    <text x="990" y="147" text-anchor="middle" font-weight="600">⑥ 固化</text>
+    <text x="990" y="163" text-anchor="middle" font-size="10.5" opacity="0.85">核心 / 分册 / practices</text>
+
+    <rect x="1090" y="128" width="80" height="44" rx="8" fill="#ffffff" opacity="0.14"/>
+    <text x="1130" y="147" text-anchor="middle" font-weight="600">⑦ 度量</text>
+    <text x="1130" y="163" text-anchor="middle" font-size="10.5" opacity="0.85">看趋势</text>
+  </g>
+
+  <g stroke="#ffffff" stroke-width="1.6" marker-end="url(#arrowWhite)" opacity="0.75">
+    <line x1="210" y1="150" x2="238" y2="150"/>
+    <line x1="380" y1="150" x2="408" y2="150"/>
+    <line x1="550" y1="150" x2="578" y2="150"/>
+    <line x1="720" y1="150" x2="748" y2="150"/>
+    <line x1="890" y1="150" x2="918" y2="150"/>
+    <line x1="1060" y1="150" x2="1088" y2="150"/>
+  </g>
+
+  <!-- 回流曲线 -->
+  <path d="M 1130 178 C 1130 214, 700 214, 400 210 C 250 207, 140 198, 140 180"
+        fill="none" stroke="#9ae6b4" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrowGreen)"/>
+  <text x="640" y="238" text-anchor="middle" font-size="11" fill="#c6f6d5">度量结果回流为下一轮反馈 · 环不闭合就不算进化</text>
+
+  <!-- ===== 中部左：三层结构 ===== -->
+  <rect x="40" y="262" width="330" height="238" rx="12" fill="#ffffff" stroke="#d6dee8"/>
+  <text x="60" y="288" font-size="14" font-weight="700" fill="#1a365d">三层结构（按需加载）</text>
+
+  <rect x="60" y="300" width="290" height="52" rx="8" fill="#ebf4ff" stroke="#90b4d8"/>
+  <text x="74" y="320" font-size="12.5" font-weight="700" fill="#1a365d">AGENTS.md · 常驻核心</text>
+  <text x="74" y="338" font-size="11" fill="#4a5568">总纲 / 铁律 / 档位 / 硬条款 / 索引（≤8k 字符）</text>
+
+  <rect x="60" y="362" width="290" height="52" rx="8" fill="#f0f5ff" stroke="#b8cbe0"/>
+  <text x="74" y="382" font-size="12.5" font-weight="700" fill="#2c5282">docs/workflow/rules/ · 9 分册</text>
+  <text x="74" y="400" font-size="11" fill="#4a5568">01 总纲细则 … 09 环境/变更记录</text>
+
+  <rect x="60" y="424" width="290" height="52" rx="8" fill="#f7fafc" stroke="#cbd5e0"/>
+  <text x="74" y="444" font-size="12.5" font-weight="700" fill="#4a5568">docs/workflow/practices/ · 经验库</text>
+  <text x="74" y="462" font-size="11" fill="#4a5568">按问题类型组织 · 每条须写「已固化到」</text>
+
+  <text x="60" y="492" font-size="10.5" fill="#718096">判据：使用占比（高频→核心 / 特定场景→分册 / 偶发→经验库）</text>
+
+  <!-- ===== 中部右：产物落点 ===== -->
+  <rect x="390" y="262" width="390" height="238" rx="12" fill="#ffffff" stroke="#d6dee8"/>
+  <text x="410" y="288" font-size="14" font-weight="700" fill="#1a365d">产物落点（结论必须有文件落点）</text>
+
+  <g font-size="11.5" fill="#2d3748">
+    <rect x="410" y="300" width="170" height="36" rx="6" fill="#f7fafc" stroke="#cbd5e0"/>
+    <text x="424" y="323">tasks/ · 任务书</text>
+
+    <rect x="590" y="300" width="170" height="36" rx="6" fill="#f7fafc" stroke="#cbd5e0"/>
+    <text x="604" y="323">board.md · 任务板</text>
+
+    <rect x="410" y="346" width="170" height="36" rx="6" fill="#f7fafc" stroke="#cbd5e0"/>
+    <text x="424" y="369">feedback/ · 反馈登记</text>
+
+    <rect x="590" y="346" width="170" height="36" rx="6" fill="#f7fafc" stroke="#cbd5e0"/>
+    <text x="604" y="369">audit/ · 审计结论</text>
+
+    <rect x="410" y="392" width="170" height="36" rx="6" fill="#f7fafc" stroke="#cbd5e0"/>
+    <text x="424" y="415">decisions.md · 决策</text>
+
+    <rect x="590" y="392" width="170" height="36" rx="6" fill="#f7fafc" stroke="#cbd5e0"/>
+    <text x="604" y="415">review/ · 复盘日志</text>
+  </g>
+
+  <text x="410" y="456" font-size="10.5" fill="#718096">单文件（任务板 / 决策记录）由 Lead 独占写；</text>
+  <text x="410" y="472" font-size="10.5" fill="#718096">反馈登记按人分节追加，避免并发覆盖。</text>
+  <text x="410" y="492" font-size="10.5" fill="#718096">作用：跨轮不靠对话记忆，交接有据可查。</text>
+
+  <!-- ===== 中部右二：协作角色 ===== -->
+  <rect x="800" y="262" width="400" height="238" rx="12" fill="#ffffff" stroke="#d6dee8"/>
+  <text x="820" y="288" font-size="14" font-weight="700" fill="#1a365d">协作角色与判据</text>
+
+  <rect x="820" y="300" width="175" height="96" rx="8" fill="#fffaf0" stroke="#ecc94b"/>
+  <text x="834" y="320" font-size="12.5" font-weight="700" fill="#7b341e">Lead（让团队跑顺）</text>
+  <text x="834" y="338" font-size="10.8" fill="#5b4a1f">· 翻译目标 / 定档 / 组队</text>
+  <text x="834" y="354" font-size="10.8" fill="#5b4a1f">· 评审裁决 / 压关键路径</text>
+  <text x="834" y="370" font-size="10.8" fill="#5b4a1f">· 扫阻塞 / 守质量门</text>
+  <text x="834" y="386" font-size="10.8" fill="#5b4a1f">· 复盘进化 / 信息不藏</text>
+
+  <rect x="1005" y="300" width="175" height="96" rx="8" fill="#f0fff4" stroke="#68d391"/>
+  <text x="1019" y="320" font-size="12.5" font-weight="700" fill="#22543d">队友（自主但不越界）</text>
+  <text x="1019" y="338" font-size="10.8" fill="#276749">· 开工确认 / 按写范围执行</text>
+  <text x="1019" y="354" font-size="10.8" fill="#276749">· 自检后交付（附证据）</text>
+  <text x="1019" y="370" font-size="10.8" fill="#276749">· 两次失败即上报</text>
+  <text x="1019" y="386" font-size="10.8" fill="#276749">· 不扩范围 / 反馈流程本身</text>
+
+  <text x="820" y="420" font-size="11" font-weight="600" fill="#2d3748">组队判据（成员不是越多越好）</text>
+  <text x="820" y="440" font-size="10.6" fill="#4a5568">· 单干：改动面单一、上下文装得下、接口未定、方向不明</text>
+  <text x="820" y="458" font-size="10.6" fill="#4a5568">· 组队：≥2 个互不依赖改动面、需实现/审计分离、可并行</text>
+  <text x="820" y="480" font-size="10.6" fill="#b7791f">· 铁律：每加一人须至少压缩一个真实等待或返工点</text>
+
+  <!-- ===== 下部：流水线 ===== -->
+  <rect x="40" y="516" width="1160" height="306" rx="12" fill="#ffffff" stroke="#d6dee8"/>
+  <text x="60" y="544" font-size="15" font-weight="700" fill="#1a365d">六阶段流水线 S0–S6</text>
+  <text x="60" y="563" font-size="10.5" fill="#718096">进入条件：开场声明（目标+可测验收 / 档位+时间盒 / 分工与写范围）；退出条件：目的达成自评 + 证据 + 遗留</text>
+
+  <!-- S0 -->
+  <rect x="60" y="584" width="152" height="120" rx="9" fill="#eef6ff" stroke="#7aa7d9"/>
+  <text x="74" y="606" font-size="13" font-weight="700" fill="#1a365d">S0 · 目标与验收</text>
+  <text x="74" y="626" font-size="10.5" fill="#2d3748">按类型分产出：</text>
+  <text x="74" y="644" font-size="10.5" fill="#2d3748">· 功能型：验收标准</text>
+  <text x="74" y="661" font-size="10.5" fill="#2d3748">· 修复型：复现+基线</text>
+  <text x="74" y="681" font-size="10.2" fill="#c0392b">没复现就改 = 猜</text>
+
+  <!-- S1 -->
+  <rect x="230" y="576" width="176" height="136" rx="9" fill="#eaf4ff" stroke="#5a8fc7" stroke-width="2"/>
+  <text x="244" y="598" font-size="13" font-weight="700" fill="#1a365d">S1 · 调查与策划</text>
+  <text x="244" y="618" font-size="10.5" font-weight="600" fill="#2c5282">A 调查（先证据）</text>
+  <text x="244" y="634" font-size="10.2" fill="#2d3748">修复：复现→定位→根因</text>
+  <text x="244" y="650" font-size="10.2" fill="#2d3748">功能：读实现/契约/依赖</text>
+  <text x="244" y="670" font-size="10.5" font-weight="600" fill="#2c5282">B 策划（L0–L4 逐层）</text>
+  <text x="244" y="686" font-size="10.2" fill="#2d3748">修复须写根因→改点→收口</text>
+  <text x="244" y="704" font-size="9.8" fill="#1e8449">方法同 S4，目的不同</text>
+
+  <!-- S2 -->
+  <rect x="424" y="592" width="140" height="104" rx="9" fill="#eef6ff" stroke="#7aa7d9"/>
+  <text x="438" y="614" font-size="13" font-weight="700" fill="#1a365d">S2 · 评审打磨</text>
+  <text x="438" y="634" font-size="10.5" fill="#2d3748">三问：可行性 /</text>
+  <text x="438" y="650" font-size="10.5" fill="#2d3748">合理性 / 优越性</text>
+  <text x="438" y="670" font-size="10.2" fill="#2d3748">红队视角找失败方式</text>
+
+  <!-- S3 -->
+  <rect x="582" y="592" width="140" height="104" rx="9" fill="#eef6ff" stroke="#7aa7d9"/>
+  <text x="596" y="614" font-size="13" font-weight="700" fill="#1a365d">S3 · 实现</text>
+  <text x="596" y="634" font-size="10.5" fill="#2d3748">任务板驱动</text>
+  <text x="596" y="650" font-size="10.5" fill="#2d3748">领取→小步→自验</text>
+  <text x="596" y="670" font-size="10.2" fill="#2d3748">写范围互斥</text>
+
+  <!-- S4 -->
+  <rect x="740" y="576" width="196" height="136" rx="9" fill="#fdf2f2" stroke="#e08a82" stroke-width="2"/>
+  <text x="754" y="598" font-size="13" font-weight="700" fill="#7b241c">S4 · 审计（必须有终点）</text>
+  <text x="754" y="616" font-size="10.2" fill="#2d3748">· 全面系统 &gt; 抽样（12 项）</text>
+  <text x="754" y="632" font-size="10.2" fill="#2d3748">· 追根因，防隐藏 bug</text>
+  <text x="754" y="648" font-size="10.2" fill="#2d3748">· 影响传播 + 正反例</text>
+  <text x="754" y="666" font-size="10.5" font-weight="600" fill="#7b241c">问题分级：高/中/低</text>
+  <text x="754" y="684" font-size="10.2" fill="#2d3748">终止：逐条有结果 / 无新增 /</text>
+  <text x="754" y="700" font-size="10.2" fill="#2d3748">到时间盒（未决须登记）</text>
+
+  <!-- S5 -->
+  <rect x="954" y="592" width="120" height="104" rx="9" fill="#eef6ff" stroke="#7aa7d9"/>
+  <text x="968" y="614" font-size="13" font-weight="700" fill="#1a365d">S5 · 真机</text>
+  <text x="968" y="634" font-size="10.5" fill="#2d3748">真实环境/数据</text>
+  <text x="968" y="650" font-size="10.5" fill="#2d3748">端到端走路径</text>
+  <text x="968" y="670" font-size="10.2" fill="#2d3748">失败按层级回环</text>
+
+  <!-- S6 -->
+  <rect x="1092" y="592" width="92" height="104" rx="9" fill="#f0fff4" stroke="#68d391"/>
+  <text x="1104" y="614" font-size="13" font-weight="700" fill="#22543d">S6 · 复盘</text>
+  <text x="1104" y="634" font-size="10.2" fill="#276749">三问必答</text>
+  <text x="1104" y="650" font-size="10.2" fill="#276749">每条须答</text>
+  <text x="1104" y="666" font-size="10.2" fill="#276749">「已固化到哪」</text>
+
+  <!-- 阶段间箭头 -->
+  <g stroke="#5b6b7f" stroke-width="1.6" marker-end="url(#arrow)">
+    <line x1="212" y1="644" x2="228" y2="644"/>
+    <line x1="406" y1="644" x2="422" y2="644"/>
+    <line x1="564" y1="644" x2="580" y2="644"/>
+    <line x1="722" y1="644" x2="738" y2="644"/>
+    <line x1="936" y1="644" x2="952" y2="644"/>
+    <line x1="1074" y1="644" x2="1090" y2="644"/>
+  </g>
+
+  <!-- 回流箭头 -->
+  <path d="M 838 712 C 838 748, 730 748, 652 744" fill="none" stroke="#c0392b" stroke-width="1.7" stroke-dasharray="5 3" marker-end="url(#arrowRed)"/>
+  <text x="756" y="790" text-anchor="middle" font-size="10.2" fill="#c0392b">高等级问题：立即回 S3 修 → S4 复审（深度上限 1 层）</text>
+
+  <path d="M 1116 696 C 1116 736, 500 740, 330 728" fill="none" stroke="#b7791f" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arrowAmber)"/>
+  <text x="560" y="760" text-anchor="middle" font-size="10.2" fill="#b7791f">中/低等级：出轮，转下一轮首项（不撑爆时间盒）</text>
+
+  <path d="M 1002 592 C 1002 566, 420 566, 318 578" fill="none" stroke="#1e8449" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arrowGreen)"/>
+  <text x="660" y="812" text-anchor="middle" font-size="10.2" fill="#1e8449">S5 失败回环：根因判断错 → 回 S1 重新调查；策划缺陷 → 回 S1-B/S2 改任务书</text>
+
+  <!-- 底部：档位与完整性 -->
+  <rect x="40" y="838" width="560" height="108" rx="12" fill="#ffffff" stroke="#d6dee8"/>
+  <text x="60" y="862" font-size="13" font-weight="700" fill="#1a365d">流程档位（按风险选，不按"想快点"选）</text>
+  <g font-size="10.6" fill="#2d3748">
+    <rect x="60" y="872" width="170" height="58" rx="7" fill="#f0fff4" stroke="#9ae6b4"/>
+    <text x="72" y="890" font-weight="700" fill="#22543d">快速 · 15–30 分钟</text>
+    <text x="72" y="906">单点可逆·自审·最小复现</text>
+    <text x="72" y="922" font-size="9.8" fill="#718096">修复型也要最小调查</text>
+
+    <rect x="240" y="872" width="170" height="58" rx="7" fill="#ebf8ff" stroke="#90cdf4"/>
+    <text x="252" y="890" font-weight="700" fill="#1a365d">标准 · 半天</text>
+    <text x="252" y="906">S0–S6·源码级+短测</text>
+    <text x="252" y="922" font-size="9.8" fill="#718096">有队友时交叉审计</text>
+
+    <rect x="420" y="872" width="170" height="58" rx="7" fill="#fffaf0" stroke="#f6e05e"/>
+    <text x="432" y="890" font-weight="700" fill="#7b341e">严格 · 1–2 天/子任务</text>
+    <text x="432" y="906">全流程+红队+双重审计</text>
+    <text x="432" y="922" font-size="9.8" fill="#718096">+异常路径+回退演练</text>
+  </g>
+
+  <rect x="620" y="838" width="580" height="108" rx="12" fill="#ffffff" stroke="#d6dee8"/>
+  <text x="640" y="862" font-size="13" font-weight="700" fill="#1a365d">「目的实现」七个展开（缺一即为半成品）</text>
+  <g font-size="10.8" fill="#2d3748">
+    <text x="640" y="884">合理性 · 优越性 · 健壮性 · 完整性</text>
+    <text x="640" y="902">必要完善与防御性 · 用户视角 · 需求补全</text>
+  </g>
+  <text x="640" y="924" font-size="10.2" fill="#718096">不只看"能跑"：合理性 = 对得住目的 + 经得起用户真实体验检验；</text>
+  <text x="640" y="940" font-size="10.2" fill="#718096">两视角冲突时以用户真实体验为先；缺的部分主动补全，拿不准就问。</text>
+
+  <!-- 图例 -->
+  <text x="620" y="970" text-anchor="middle" font-size="10" fill="#a0aec0">实线=阶段推进　红色虚线=高等级问题回流　橙色虚线=中低等级出轮　绿色虚线=失败回环与度量化</text>
+</svg>
