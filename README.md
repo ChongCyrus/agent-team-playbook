@@ -216,6 +216,25 @@ npx dsh-agent-team-playbook init --global --inline-core   # 用户全局：内�
 - v1.7：拆分为「常驻核心 + 9 分册」
 - 完整历史见 `docs/workflow/rules/09-环境适配与变更记录.md`
 
+## 发版自检
+
+```bash
+npm run smoke:pack        # 本地打包 → 真实安装一遍（发版前跑这个）
+npm run smoke -- --version 1.32.3   # 从 npm 装已发布版本，验证线上产物
+```
+
+脚本用一个**全新的 `DSH_HOME`** 走真实 `dsh plugin add`，7 项检查：
+
+1. 安装成功（pnpm 解析 + 下载）
+2. 装到版本正确，且 `dsh.bundle` / `dsh.client` / `exports["./client"]` / `engines.dsh` 齐全
+3. 组合配置里出现本插件（bundle patch 真的被激活）
+4. `cordis.patch.yml` 与实际命令一致（防止注释过期）
+5. host 半身加载并注册 `/atp`
+6. client 半身能被 ModuleLoader 装配（三个插槽都在）
+7. `bin` 可执行
+
+`npm publish` 前会自动跑第 0–7 项（`prepublishOnly`），**不通过就不发布**。
+
 ## 兼容性
 
 插件包在 `package.json` 里声明了对 DSH 运行时（`dsh-app-boot` 版本）的要求：
