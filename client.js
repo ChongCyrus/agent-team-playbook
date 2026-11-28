@@ -109,6 +109,29 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /**
+     * 共享动作：检测当前工作区 → 有冲突打开弹窗，没有就直接装。
+     * 面板按钮与首页 chip 都走这一条路径。
+     * @returns {Promise<{started: boolean, conflicts: number, error?: string}>}
+     */
+    async function detectThenInstall(ctx, onDone) {
+      try {
+        const { sessionId, cwd } = currentSession(ctx)
+        const data = await fetchStatus(cwd)
+        const found = data?.conflicts ?? []
+        const execute = (sid, line) => ctx?.remote?.commands?.execute?.(sid, line, [])
+        if (found.length > 0) {
+          writeStore({ open: true, conflicts: found, cwd: cwd ?? '', sessionId: sessionId ?? '', execute, afterApply: onDone })
+          return { started: true, conflicts: found.length }
+        }
+        await execute(sessionId, '/atp install')
+        if (typeof onDone === 'function') await onDone()
+        return { started: true, conflicts: 0 }
+      } catch (error) {
+        return { started: false, conflicts: 0, error: String(error?.message ?? error) }
+      }
+    }
+
     /** 单个冲突的选择行：覆盖 / 备份 / 改名 + 名字输入。 */
     function ChoiceRow({ index, conflict, choice, onChoose, renameEnabled, onRename }) {
       const btn = (action, text) => {
@@ -233,6 +256,45 @@ window.__ModuleLoader__.load({
       return h(Modal, { open: true, onClose: () => writeStore({ open: false }), title: '处理同名内容', closeLabel: '取消', footer }, body)
     }
 
+    /** 首页 chip 行入口：和「音乐制作 / 标准模式」并排。 */
+    function HeroEntry() {
+      const [badge, setBadge] = React.useState('')
+      const [busy, setBusy] = React.useState(false)
+
+      React.useEffect(() => {
+        let alive = true
+        ;(async () => {
+          try {
+            const { cwd } = currentSession(HeroEntry.ctx)
+            const data = await fetchStatus(cwd)
+            const n = data?.conflicts?.length ?? 0
+            if (alive && n > 0) setBadge(` · ${n}`)
+          } catch {
+            /* 静默：首页 chip 不该因为检测失败而打扰 */
+          }
+        })()
+        return () => {
+          alive = false
+        }
+      }, [])
+
+      const onClick = async () => {
+        if (busy) return
+        setBusy(true)
+        try {
+          await detectThenInstall(HeroEntry.ctx, undefined)
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      const label = busy ? '协作规程…' : `协作规程${badge}`
+      if (typeof Button === 'function') {
+        return h(Button, { variant: 'outline', disabled: busy, onClick: () => void onClick() }, label)
+      }
+      return h('button', { type: 'button', disabled: busy, onClick: () => void onClick() }, label)
+    }
+
     function Panel() {
       const [state, setState] = useState({ phase: 'loading' })
       const [copied, setCopied] = useState('')
@@ -337,21 +399,8 @@ window.__ModuleLoader__.load({
 
       // 安装：无冲突直接装；有冲突**直接弹窗**（等价于"install 后自动弹 UI"）
       const install = useCallback(async () => {
-        const ctx = Panel.ctx
-        const { sessionId, cwd } = currentSession(ctx)
-        const execute = (line) => ctx?.remote?.commands?.execute?.(sessionId, line, [])
-        try {
-          const data = await fetchStatus(cwd)
-          const found = data?.conflicts ?? []
-          if (found.length > 0) {
-            writeStore({ open: true, conflicts: found, cwd: cwd ?? '', sessionId: sessionId ?? '', execute, afterApply: refresh })
-            return
-          }
-          await execute('/atp install')
-          await refresh()
-        } catch (error) {
-          setState({ phase: 'error', message: String(error?.message ?? error) })
-        }
+        const result = await detectThenInstall(Panel.ctx, refresh)
+        if (!result.started && result.error) setState({ phase: 'error', message: result.error })
       }, [refresh])
 
       children.push(
@@ -377,6 +426,15 @@ window.__ModuleLoader__.load({
         order: 36,
         label: () => '协作规程',
       }, () => h(Panel, null)))
+
+      // 首页 chip 行入口：和「音乐制作 / 标准模式」并排
+      HeroEntry.ctx = ctx
+      ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
+        name: 'conversation.hero.options',
+        id: 'agent-team-playbook.entry',
+        order: 20,
+        label: () => '协作规程',
+      }, () => h(HeroEntry, null)))
 
       // 冲突处理弹窗：常驻挂载，关闭时渲染 null
       ctx.slots.inject('shell.overlay', () => ctx.slots.register({
