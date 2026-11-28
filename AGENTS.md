@@ -1,4 +1,4 @@
-# AGENTS.md（常驻核心 · v1.17）
+# AGENTS.md（常驻核心 · v1.18）
 
 > **定位**：团队（Lead + 队友）共享的最高工作约定。本文件是**常驻最小集**；展开细则在 `docs/workflow/rules/`，按下文 §8 索引按需查阅。全文备份：`archive/AGENTS-v1.7-full.md`（拆分前最新全文）、`archive/AGENTS-v1.5-full.md`（更早快照）。
 > **同源关系**：分册是本文件的展开解释，不是另一套规则。**原则与速查以本文件为准；细则细节以分册为准**——摘要与细则不一致时，以细则为真，并立即修正本文件。
@@ -114,7 +114,7 @@ docs/workflow/practices/             # 经验与做法库（按问题类型组�
 | 组队、Lead/队友职责、沟通、共享资源 | `docs/workflow/rules/06-协作细则.md` |
 | 问用户、对齐验收 | `docs/workflow/rules/07-用户交互与度量.md` |
 | 复盘、改进规则 | `docs/workflow/rules/01-总纲细则.md` + `docs/workflow/rules/07-用户交互与度量.md` |
-| 换 harness / 查版本历史 | `docs/workflow/rules/09-环境适配与变更记录.md` |
+| 换 harness / 查版本历史 | `docs/workflow/rules/09-环境适配与变更记录.md`（§10 环境适配 / §11 变更记录） |
 | 查反模式清单、速查卡 | `docs/workflow/rules/08-反模式与速查.md` |
 
 **索引是"条件必达"，不是"可选参考"**：触发条件一旦出现，先读再动手；跳过必须在收尾时写明理由。
