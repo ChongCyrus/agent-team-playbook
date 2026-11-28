@@ -283,7 +283,8 @@ async function main() {
   // ── 2. 决策 ────────────────────────────────────────────────────────
   const renames = []
   const defaultSuffix = `.bak-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}`
-  let onConflict = 'overwrite'
+  let onConflict = 'proceed'
+  let backupAllConflicts = false
   let backupSuffix
   let install = true
   const interactive = stdin.isTTY && stdout.isTTY
@@ -327,7 +328,7 @@ async function main() {
       install = false
       console.log(C.dim('  --skip-conflicts：整体跳过（不会只装一半）'))
     } else if (opts.backupExisting) {
-      onConflict = 'backup'
+      backupAllConflicts = true
       backupSuffix = defaultSuffix
       console.log(C.dim(`  --backup-existing：已有冲突项改名为 *${defaultSuffix} 后安装`))
     } else if (!interactive) {
@@ -353,7 +354,7 @@ async function main() {
             console.error(C.red('  后缀只能含字母数字点下划线横线，已中止。'))
             process.exit(1)
           }
-          onConflict = 'backup'
+          backupAllConflicts = true
           backupSuffix = suffix
         } else if (answer === 'r') {
           for (const unit of new Set(unresolved.map((c) => c.unit))) {
@@ -401,6 +402,7 @@ async function main() {
     targetDir: opts.dir,
     onConflict,
     renames,
+    backupTargets: backupAllConflicts ? conflicts.map((c) => c.target) : [],
     backupSuffix,
   })
 

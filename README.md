@@ -105,6 +105,7 @@ dsh plugin --profile web add dsh-agent-team-playbook
 | `/atp paths` | 各分册的绝对路径，按需查阅 |
 | `/atp install` | 把 playbook **原子安装进当前工作区**（有同名内容则拒绝，不覆盖） |
 | `/atp install force` | 覆盖同名内容后安装（先暂存原件，失败自动回滚） |
+| `/atp apply 1=覆盖 2=备份 3=改名:x` | 对 install 列出的冲突**逐项决定**（覆盖 / 备份你的文件 / 我们这侧改名并同步引用） |
 | `/atp help` | 用法 |
 
 插件**不写任何文件**、也**不挂 skill**——skill 的目录摘要会常驻占用上下文（约 300 tokens/轮），而分册本来就不会自动进上下文，用命令按需取更划算。
