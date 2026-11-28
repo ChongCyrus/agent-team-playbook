@@ -80,10 +80,14 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
     function buildApplySpec(choices) {
       const parts = choices.map((c, i) => {
         if (c.action === 'backup') return `${i + 1}=备份`
-        if (c.action === 'rename') return `${i + 1}=改名:${c.name}`
+        if (c.action === 'rename') {
+          const name = String(c.name)
+          return `${i + 1}=改名:${/\s/.test(name) ? `"${name}"` : name}`
+        }
         return `${i + 1}=覆盖`
       })
-      return `/atp apply ${parts.join(' ')}`
+      // count 让后端校验"冲突清单没变过"，避免决策套到别的文件上
+      return `/atp apply count=${choices.length} ${parts.join(' ')}`
     }
 
     /** 读一次状态；cwd 为空时只验证连通性。 */
@@ -179,7 +183,10 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
           writeStore({ open: true, conflicts: found, cwd: cwd ?? '', sessionId: sessionId ?? '', execute, afterApply: onDone })
           return { started: true, conflicts: found.length }
         }
-        await execute(sessionId, '/atp install')
+        const result = await execute(sessionId, '/atp install')
+        if (result && result.ok === false) {
+          return { started: false, conflicts: 0, error: result?.error?.message ?? '安装命令执行失败' }
+        }
         if (typeof onDone === 'function') await onDone()
         return { started: true, conflicts: 0 }
       } catch (error) {
@@ -216,7 +223,16 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
           }),
           pill('确定', () => {
             const clean = String(name).trim()
-            if (clean !== '') onDecide(index, 'rename', clean)
+            if (clean === '') return
+            if (/[/\\]/.test(clean)) {
+              setName(`${clean}！名字不能含 / 或 \\`)
+              return
+            }
+            if (clean === '.' || clean === '..') {
+              setName('..！名字不能是 . 或 ..')
+              return
+            }
+            onDecide(index, 'rename', clean)
           }, 'ok'),
           pill('取消', () => setRenaming(false), 'no'))
       }
@@ -273,13 +289,24 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
             runningRef.current = false
             return
           }
+          // 同一单元只能有一个名字；出现两个不同名字时拦下来，别让后者被静默覆盖
+          const coreNames = new Set(choices.filter((c, i) => c.action === 'rename' && conflicts[i].rel === 'AGENTS.md').map((c) => String(c.name).trim()))
+          const docsNames = new Set(choices.filter((c, i) => c.action === 'rename' && conflicts[i].rel !== 'AGENTS.md').map((c) => String(c.name).trim()))
+          if (coreNames.size > 1 || docsNames.size > 1) {
+            setError('同一类（核心 / 分册）只能填一个名字')
+            runningRef.current = false
+            return
+          }
           const line = buildApplySpec(normalized)
           const result = await state.execute(state.sessionId, line)
           if (result && result.ok === false) throw new Error(result?.error?.message ?? '命令执行失败')
           writeStore({ open: false })
           if (typeof state.afterApply === 'function') await state.afterApply()
         } catch (e) {
-          setError(String(e?.message ?? e))
+          setError(`${String(e?.message ?? e)}（已恢复清单，可重新选择）`)
+          // 恢复列表：否则用户看着错误但无行可点，只能取消重来
+          decidedRef.current = new Map()
+          setDecidedCount(0)
           runningRef.current = false
         }
       }
@@ -299,6 +326,7 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
       }
 
       const remaining = conflicts.length - decidedCount
+      const anyRename = [...decidedRef.current.values()].some((c) => c.action === 'rename')
       const rows = conflicts
         .map((conflict, index) => ({ conflict, index }))
         .filter(({ index }) => !decidedRef.current.has(index))
@@ -316,6 +344,10 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
           h('button', { type: 'button', style: { ...S.pill, color: 'var(--dsw-alias-label-primary, inherit)' }, onClick: () => decideAll('backup') }, '全部备份')),
         h('div', { key: 'list', style: S.dialogBody },
           rows.length > 0 ? rows : h('div', { style: S.muted }, '已全部决定，正在执行…')),
+        anyRename
+          ? h('div', { key: 'rn', style: { ...S.muted, marginTop: 6, lineHeight: 1.5 } },
+              '改名是「整份改名」：分册→整个 docs 目录，核心→AGENTS.md。改名后的核心不会被 DSH 自动注入。')
+          : null,
         error ? h('div', { key: 'err', style: { color: 'var(--dsw-alias-label-danger, #e06c5a)', marginTop: 8, fontSize: 12 } }, error) : null,
         h('div', { key: 'hint', style: { ...S.muted, marginTop: 8, lineHeight: 1.4 } },
           '点一项即定案，全部决定后自动执行一条 /atp apply。'),
@@ -415,14 +447,29 @@ div:has(> .atp-wrap){ margin-left: 0 !important; }
         return () => document.removeEventListener('pointerdown', onDown, true)
       }, [open])
 
+      const refreshBadge = async () => {
+        try {
+          const { cwd } = currentSession(HeroEntry.ctx)
+          const data = await fetchStatus(cwd)
+          const n = data?.conflicts?.length ?? 0
+          setBadge(n > 0 ? ` · ${n}` : '')
+        } catch {
+          /* 静默 */
+        }
+      }
+
       const run = async (fn) => {
         setOpen(false)
         if (busy) return
         setBusy(true)
         try {
-          await fn()
+          const res = await fn()
+          if (res !== undefined && res !== null && res.started === false && res.error) {
+            console.warn('agent-team-playbook:', res.error)
+          }
         } finally {
           setBusy(false)
+          void refreshBadge()
         }
       }
 
