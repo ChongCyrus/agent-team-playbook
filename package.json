@@ -1,6 +1,6 @@
 {
   "name": "dsh-agent-team-playbook",
-  "version": "1.22.0",
+  "version": "1.22.1",
   "description": "DeepSeek Harness skill bundle: an executable multi-agent collaboration workflow for groups of AI teammates — charter, triage tiers, six-stage pipeline, audit gates, problem triage and an experience library.",
   "type": "module",
   "license": "MIT",
