@@ -1,5 +1,11 @@
 # Agent Team Playbook · 多智能体协作工作流
 
+中文 | [English](README.en.md)
+
+> [![npm version](https://img.shields.io/npm/v/dsh-agent-team-playbook)](https://www.npmjs.com/package/dsh-agent-team-playbook)
+> [![license](https://img.shields.io/npm/l/dsh-agent-team-playbook)](LICENSE)
+> ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.1%20%3C0.3.0-2f6f4f)
+
 给「Lead + 多名 AI 队友」用的一整套协作规程：怎么定档、怎么分工、怎么写任务书、怎么审计、怎么验收、怎么复盘。
 
 不是提示词合集，而是**可执行的流程与门禁**——每条规则都对应一个可判真假的动作和落点文件。
