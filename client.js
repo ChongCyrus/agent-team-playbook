@@ -447,7 +447,7 @@ window.__ModuleLoader__.load({
     exports.inject = ['slots', 'sessions', 'remote.commands']
     exports.name = NAME
     // 测试缝：拼命令是纯函数，单独可测
-    exports.__test = { buildApplySpec }
+    exports.__test = { buildApplySpec, detectThenInstall, ResolveDialog, ChoiceRow, readStore }
     return module.exports
   },
 })
