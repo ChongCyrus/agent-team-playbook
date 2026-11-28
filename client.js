@@ -58,6 +58,59 @@ window.__ModuleLoader__.load({
 .atp-chip .atp-chip-glyph{ flex: none; color: var(--dsw-alias-label-primary, inherit); }
 /* heroOptions 容器原生是 margin-left:auto（靠右）；把我们那行拉回左对齐，紧跟「标准模式」后面 */
 div:has(> .atp-chip){ margin-left: 0 !important; }
+
+/* chip 包裹层：给下拉菜单做定位基准 */
+.atp-wrap{ position: relative; display: inline-flex; }
+
+/* 下拉菜单：沿用原生菜单的材质变量 */
+.atp-menu{
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  min-width: 200px;
+  padding: 4px;
+  border-radius: var(--dsw-radius-md, 10px);
+  box-shadow: var(--dsw-elevation-panel, 0 8px 24px rgba(0,0,0,.32));
+  background: var(--dsw-specific-menu, rgba(40,40,40,.98));
+  backdrop-filter: var(--dsw-menu-backdrop-filter, blur(12px));
+}
+.atp-menu-item{
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm, 8px);
+  background: none;
+  color: var(--dsw-alias-label-primary, inherit);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.atp-menu-item:hover{ background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.16)); }
+.atp-menu-item[data-danger="true"]{ color: var(--dsw-alias-label-danger, #e06c5a); }
+.atp-menu-hint{ padding: 6px 10px; font-size: 12px; opacity: .6; }
+
+/* 冲突面板：限高 + 内部滚动，避免撑满整屏 */
+.atp-conflict-body{
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+.atp-conflict-row{ display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid rgba(127,127,127,.18); }
+.atp-conflict-row:first-child{ border-top: none; }
+.atp-conflict-path{ flex: 1 1 auto; min-width: 0; word-break: break-all; font-size: 13px; }
+.atp-conflict-actions{ flex: none; display: flex; gap: 6px; flex-wrap: wrap; }
+.atp-pill{ min-height: 26px; padding: 0 8px; border-radius: var(--dsw-radius-sm, 8px); border: 1px solid rgba(127,127,127,.35);
+  background: none; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.atp-pill:hover{ background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.16)); }
+.atp-toolbar{ display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.atp-muted{ opacity: .6; font-size: 12px; }
 `
     const CHIP_STYLE_ID = 'agent-team-playbook/chip.css'
 
@@ -190,134 +243,149 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
       }
     }
 
-    /** 单个冲突的选择行：覆盖 / 备份 / 改名 + 名字输入。 */
-    function ChoiceRow({ index, conflict, choice, onChoose, renameEnabled, onRename }) {
-      const btn = (action, text) => {
-        const active = choice?.action === action
-        const props = { key: action, onClick: () => onChoose(index, action) }
-        if (typeof Button === 'function') return h(Button, { ...props, variant: active ? 'primary' : 'outline' }, text)
-        return h('button', { ...props, type: 'button', style: { fontWeight: active ? 700 : 400 } }, text)
-      }
-      const children = [
-        h('div', { key: 'label', style: { wordBreak: 'break-all', marginBottom: 4 } }, `${index + 1}. ${conflict.rel}`),
-        h('div', { key: 'reason', style: { opacity: 0.6, fontSize: 12, marginBottom: 6 } }, conflict.reason),
-        h('div', { key: 'btns', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
-          btn('overwrite', '覆盖'),
-          btn('backup', '备份'),
-          renameEnabled ? btn('rename', '改名…') : null),
-      ]
-      if (choice?.action === 'rename') {
-        children.push(
-          h('div', { key: 'rename', style: { marginTop: 6 } },
-            h('input', {
-              value: choice.name ?? '',
-              placeholder: '新名字（如 team-docs / AGENTS.team.md）',
-              onChange: (e) => onRename(index, e.target.value),
-              style: { width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid rgba(127,127,127,0.4)', background: 'transparent', color: 'inherit' },
-            }),
-            h('div', { style: { opacity: 0.55, fontSize: 12, marginTop: 4 } }, '整份改名：同一类（核心/分册）只需填一次'),
-          ),
-        )
-      }
-      return h('div', { key: `row${index}`, style: { padding: '8px 0', borderTop: index === 0 ? 'none' : '1px solid rgba(127,127,127,0.18)' } }, children)
+    /**
+     * 单个冲突行：点「覆盖 / 备份」立即定案（该行随即消失）；
+     * 点「改名…」展开名字输入，确认后定案。
+     */
+    function ChoiceRow({ index, conflict, onDecide }) {
+      const [renaming, setRenaming] = React.useState(false)
+      const [name, setName] = React.useState('')
+
+      const pill = (text, onClick, key) => h('button', { key, type: 'button', className: 'atp-pill', onClick }, text)
+
+      return h('div', { className: 'atp-conflict-row' },
+        h('div', { className: 'atp-conflict-path' },
+          h('div', null, `${index + 1}. ${conflict.rel}`),
+          h('div', { className: 'atp-muted' }, conflict.reason),
+          renaming
+            ? h('div', { style: { display: 'flex', gap: 6, marginTop: 6 } },
+                h('input', {
+                  value: name,
+                  placeholder: '新名字，如 team-docs / AGENTS.team.md',
+                  onChange: (e) => setName(e.target.value),
+                  style: { flex: '1 1 auto', minWidth: 0, height: 26, padding: '0 8px', borderRadius: 6, border: '1px solid rgba(127,127,127,.4)', background: 'transparent', color: 'inherit', font: 'inherit', fontSize: 12 },
+                }),
+                pill('确定', () => {
+                  const clean = String(name).trim()
+                  if (clean !== '') onDecide(index, 'rename', clean)
+                }, 'ok'),
+                pill('取消', () => setRenaming(false), 'cancel'))
+            : null),
+        h('div', { className: 'atp-conflict-actions' },
+          pill('覆盖', () => onDecide(index, 'overwrite'), 'ow'),
+          pill('备份', () => onDecide(index, 'backup'), 'bk'),
+          renaming ? null : pill('改名…', () => setRenaming(true), 'rn')))
     }
 
-    /** 冲突处理弹窗（挂在 shell.overlay 上，关闭时渲染 null）。 */
+    /**
+     * 冲突处理面板：限高可滚动；逐项点击即定案、该行消失；
+     * 全部定案后自动合成一条 /atp apply 执行。
+     */
     function ResolveDialog() {
       const state = useStore()
-      const [choices, setChoices] = React.useState([])
+      const decidedRef = React.useRef(new Map())
+      const [decidedCount, setDecidedCount] = React.useState(0)
       const [error, setError] = React.useState('')
+      const runningRef = React.useRef(false)
 
       React.useEffect(() => {
         if (!state.open) return
+        decidedRef.current = new Map()
+        setDecidedCount(0)
         setError('')
-        setChoices((state.conflicts ?? []).map(() => ({ action: 'overwrite' })))
+        runningRef.current = false
       }, [state.open, state.conflicts])
 
       if (!state.open) return null
 
-      const isCoreRel = (rel) => rel === 'AGENTS.md'
-      const onChoose = (i, action) => {
-        setChoices((prev) => {
-          const next = [...prev]
-          next[i] = { ...(next[i] ?? {}), action }
-          return next
-        })
-      }
-      const onRename = (i, name) => {
-        setChoices((prev) => {
-          const next = [...prev]
-          next[i] = { ...(next[i] ?? {}), action: 'rename', name }
-          // 同一单元（核心/分册）共享同一个改名值
-          const unit = isCoreRel((state.conflicts ?? [])[i]?.rel ?? '')
-          next.forEach((c, j) => {
-            if (j !== i && isCoreRel((state.conflicts ?? [])[j]?.rel ?? '') === unit) next[j] = { ...(next[j] ?? {}), name }
-          })
-          return next
-        })
+      const conflicts = state.conflicts ?? []
+
+      const decide = (index, action, name) => {
+        decidedRef.current.set(index, { action, name })
+        setDecidedCount(decidedRef.current.size)
+        void maybeApply()
       }
 
-      const apply = async () => {
-        const conflicts = state.conflicts ?? []
-        const missing = choices.findIndex((c, i) => c?.action === 'rename' && !String(c.name ?? '').trim())
-        if (missing >= 0) {
-          setError(`第 ${missing + 1} 项选了改名但没填名字`)
-          return
-        }
-        if (!state.sessionId || typeof state.execute !== 'function') {
-          setError('拿不到当前会话，无法执行；请改用 /atp apply 命令')
-          return
-        }
+      const decideAll = (action) => {
+        conflicts.forEach((_, i) => {
+          if (!decidedRef.current.has(i)) decidedRef.current.set(i, { action })
+        })
+        setDecidedCount(decidedRef.current.size)
+        void maybeApply()
+      }
+
+      const maybeApply = async () => {
+        if (runningRef.current) return
+        if (decidedRef.current.size < conflicts.length) return
+        runningRef.current = true
         try {
-          writeStore({ busy: true })
-          const line = buildApplySpec(choices)
+          // 同一单元（核心/分册）共享改名值
+          const choices = conflicts.map((c, i) => {
+            const d = decidedRef.current.get(i) ?? { action: 'overwrite' }
+            return d
+          })
+          const coreName = choices.find((c, i) => c.action === 'rename' && conflicts[i].rel === 'AGENTS.md')?.name
+          const docsName = choices.find((c, i) => c.action === 'rename' && conflicts[i].rel !== 'AGENTS.md')?.name
+          const normalized = conflicts.map((c, i) => {
+            const d = choices[i]
+            if (d.action !== 'rename') return d
+            return { action: 'rename', name: c.rel === 'AGENTS.md' ? coreName : docsName }
+          })
+          if (normalized.some((c) => c.action === 'rename' && !String(c.name ?? '').trim())) {
+            setError('改名项缺少名字')
+            runningRef.current = false
+            return
+          }
+          const line = buildApplySpec(normalized)
           const result = await state.execute(state.sessionId, line)
           if (result && result.ok === false) throw new Error(result?.error?.message ?? '命令执行失败')
-          writeStore({ open: false, busy: false, message: `已执行：${line}` })
+          writeStore({ open: false })
           if (typeof state.afterApply === 'function') await state.afterApply()
         } catch (e) {
           setError(String(e?.message ?? e))
-          writeStore({ busy: false })
+          runningRef.current = false
         }
       }
+
+      const rows = conflicts
+        .map((conflict, index) => ({ conflict, index }))
+        .filter(({ index }) => !decidedRef.current.has(index))
+        .map(({ conflict, index }) => h(ChoiceRow, { key: `c${index}`, index, conflict, onDecide: decide }))
 
       const footer = h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
         typeof Button === 'function'
           ? h(Button, { variant: 'outline', onClick: () => writeStore({ open: false }) }, '取消')
-          : h('button', { type: 'button', onClick: () => writeStore({ open: false }) }, '取消'),
-        typeof Button === 'function'
-          ? h(Button, { variant: 'primary', disabled: state.busy, onClick: () => void apply() }, state.busy ? '执行中…' : '应用')
-          : h('button', { type: 'button', disabled: state.busy, onClick: () => void apply() }, '应用'),
-      )
+          : h('button', { type: 'button', onClick: () => writeStore({ open: false }) }, '取消'))
 
       const body = [
-        h('div', { key: 'cwd', style: { opacity: 0.65, fontSize: 12, marginBottom: 10, wordBreak: 'break-all' } }, state.cwd),
-        ...(state.conflicts ?? []).map((conflict, i) =>
-          h(ChoiceRow, {
-            key: `c${i}`,
-            index: i,
-            conflict,
-            choice: choices[i],
-            onChoose,
-            renameEnabled: true,
-            onRename,
-          })),
-        error ? h('div', { key: 'err', style: { color: 'var(--dsh-danger, #c0563b)', marginTop: 10 } }, error) : null,
-        h('div', { key: 'hint', style: { opacity: 0.55, fontSize: 12, marginTop: 12 } },
-          '点"应用"会执行一条 /atp apply 命令（与手动输入等价，可在会话里看到审计记录）。'),
+        h('div', { key: 'cwd', className: 'atp-muted', style: { marginBottom: 8, wordBreak: 'break-all' } }, state.cwd),
+        h('div', { key: 'bar', className: 'atp-toolbar' },
+          h('span', { className: 'atp-muted' }, `还剩 ${conflicts.length - decidedCount} 项`),
+          h('button', { type: 'button', className: 'atp-pill', onClick: () => decideAll('overwrite') }, '全部覆盖'),
+          h('button', { type: 'button', className: 'atp-pill', onClick: () => decideAll('backup') }, '全部备份')),
+        h('div', { key: 'list', className: 'atp-conflict-body' }, rows.length > 0 ? rows : h('div', { className: 'atp-muted' }, '已全部决定，正在执行…')),
+        error ? h('div', { key: 'err', style: { color: 'var(--dsh-alias-label-danger, #e06c5a)', marginTop: 8 } }, error) : null,
+        h('div', { key: 'hint', className: 'atp-muted', style: { marginTop: 8 } },
+          '每点一项即定案；全部决定后自动执行一条 /atp apply 命令（与手打等价，可在会话里看到）。'),
       ].filter(Boolean)
 
       if (typeof Modal !== 'function') {
-        return h('div', { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, padding: 20, overflow: 'auto' } },
-          h('div', { style: { background: 'var(--dsh-surface, #1b1b1b)', padding: 16, borderRadius: 10 } }, body, footer))
+        return h('div', { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 9999, padding: 16, overflow: 'auto' } },
+          h('div', { style: { background: 'var(--dsw-specific-menu, #1b1b1b)', padding: 16, borderRadius: 10, maxHeight: '80vh' } }, body, footer))
       }
       return h(Modal, { open: true, onClose: () => writeStore({ open: false }), title: '处理同名内容', closeLabel: '取消', footer }, body)
     }
 
-    /** 首页 chip 行入口：和「音乐制作 / 标准模式」并排。 */
+
+    /**
+     * 首页 chip + 下拉菜单（菜单样式沿用原生菜单材质变量）。
+     * 菜单项：安装 / 覆盖式安装 / 检查冲突 / 复制命令。
+     */
     function HeroEntry() {
       const [badge, setBadge] = React.useState('')
+      const [open, setOpen] = React.useState(false)
       const [busy, setBusy] = React.useState(false)
+      const wrapRef = React.useRef(null)
 
       React.useEffect(() => {
         let alive = true
@@ -328,7 +396,7 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
             const n = data?.conflicts?.length ?? 0
             if (alive && n > 0) setBadge(` · ${n}`)
           } catch {
-            /* 静默：首页 chip 不该因为检测失败而打扰 */
+            /* 静默：chip 不该因为检测失败而打扰 */
           }
         })()
         return () => {
@@ -336,28 +404,92 @@ div:has(> .atp-chip){ margin-left: 0 !important; }
         }
       }, [])
 
-      const onClick = async () => {
+      // 点外部关闭
+      React.useEffect(() => {
+        if (!open) return
+        const onPointerDown = (event) => {
+          const node = wrapRef.current
+          if (node !== null && node.contains(event.target)) return
+          setOpen(false)
+        }
+        document.addEventListener('pointerdown', onPointerDown, true)
+        return () => document.removeEventListener('pointerdown', onPointerDown, true)
+      }, [open])
+
+      const run = async (fn) => {
+        setOpen(false)
         if (busy) return
         setBusy(true)
         try {
-          await detectThenInstall(HeroEntry.ctx, undefined)
+          await fn()
         } finally {
           setBusy(false)
         }
       }
 
-      const label = busy ? '协作规程…' : `协作规程${badge}`
+      const items = [
+        {
+          key: 'install',
+          label: '安装到工作区',
+          onSelect: () => detectThenInstall(HeroEntry.ctx, undefined),
+        },
+        {
+          key: 'force',
+          label: '覆盖式安装',
+          danger: true,
+          onSelect: async () => {
+            const { sessionId } = currentSession(HeroEntry.ctx)
+            await remoteExecute(HeroEntry.ctx, sessionId, '/atp install force')
+          },
+        },
+        {
+          key: 'check',
+          label: '检查冲突…',
+          onSelect: () => detectThenInstall(HeroEntry.ctx, undefined),
+        },
+        {
+          key: 'copy',
+          label: '复制 /atp install',
+          onSelect: async () => {
+            try {
+              await navigator.clipboard.writeText('/atp install')
+            } catch {
+              /* 剪贴板不可用就算了 */
+            }
+          },
+        },
+      ]
+
       const Icon = primitives?.IconChecklistOutlineRegular
-      // 结构照抄原生 chip：button + 16px 图标 + 文本（无边框、透明底、hover 才出底色）
-      return h('button', {
-        type: 'button',
-        className: 'atp-chip',
-        disabled: busy,
-        'aria-label': '多智能体协作规程',
-        onClick: () => void onClick(),
-      },
-      Icon !== undefined ? h(Icon, { className: 'atp-chip-glyph', size: 16 }) : null,
-      h('span', { className: 'atp-chip-label' }, label))
+      const label = busy ? '协作规程…' : `协作规程${badge}`
+
+      return h('div', { className: 'atp-wrap', ref: wrapRef },
+        h('button', {
+          type: 'button',
+          className: 'atp-chip',
+          disabled: busy,
+          'aria-label': '多智能体协作规程',
+          'aria-expanded': open,
+          'aria-haspopup': 'menu',
+          onClick: () => setOpen((v) => !v),
+        },
+        Icon !== undefined ? h(Icon, { className: 'atp-chip-glyph', size: 16 }) : null,
+        h('span', { className: 'atp-chip-label' }, label),
+        h('span', { className: 'atp-chip-glyph', style: { fontSize: 10 } }, '▾')),
+
+        open
+          ? h('div', { className: 'atp-menu', role: 'menu' },
+              ...items.map((item) =>
+                h('button', {
+                  key: item.key,
+                  type: 'button',
+                  role: 'menuitem',
+                  className: 'atp-menu-item',
+                  'data-danger': item.danger === true ? 'true' : undefined,
+                  onClick: () => void run(item.onSelect),
+                }, item.label)),
+              h('div', { className: 'atp-menu-hint' }, '覆盖式安装会先把你的原件暂存，失败可回滚'))
+          : null)
     }
 
     function Panel() {
