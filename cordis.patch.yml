@@ -1,0 +1,26 @@
+# dsh-agent-team-playbook —— DSH bundle patch
+#
+# 挂载方式：不复制、不改写用户任何文件。两件事：
+#   1) 用官方 skill provider 把本包 skills/ 目录里的 playbook 挂进 skill 目录；
+#   2) 挂本包自己的 guard 入口，启动时检查「同名 skill 被别的来源抢走」并给出提示
+#      （DSH 对同名 skill 不报错，只按 rank 静默择优，所以必须主动提示）。
+#
+# 安装：dsh plugin --profile web add dsh-agent-team-playbook
+# 本地开发：dsh plugin --profile web add link:<本目录绝对路径>
+#
+# skills 路径从包安装位置推算，因此 npm 安装 / GitHub 安装 / 本地 link 都能工作。
+
+- insert:
+    - id: dsh-agent-team-playbook-skills
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        providerName: agent-team-playbook
+        includeDefaultRoots: false
+        watch: false
+        customSkillDirs:
+          - !!js "process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('dsh-agent-team-playbook/package.json'), '..', 'skills')"
+
+    - id: dsh-agent-team-playbook-guard
+      name: dsh-agent-team-playbook
+      config:
+        skillName: agent-team-playbook

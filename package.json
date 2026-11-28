@@ -1,0 +1,48 @@
+{
+  "name": "dsh-agent-team-playbook",
+  "version": "1.22.0",
+  "description": "DeepSeek Harness skill bundle: an executable multi-agent collaboration workflow for groups of AI teammates — charter, triage tiers, six-stage pipeline, audit gates, problem triage and an experience library.",
+  "type": "module",
+  "license": "MIT",
+  "author": "ChongCyrus",
+  "homepage": "https://github.com/ChongCyrus/agent-team-playbook",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChongCyrus/agent-team-playbook.git"
+  },
+  "bin": {
+    "dsh-agent-team-playbook": "./bin/cli.mjs"
+  },
+  "main": "lib/index.js",
+  "files": [
+    "lib",
+    "bin",
+    "scripts",
+    "cordis.patch.yml",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh-plugin",
+    "dsh-bundle",
+    "agent-skill",
+    "multi-agent",
+    "workflow",
+    "agents-md",
+    "playbook"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "sync": "node scripts/sync-skill.mjs",
+    "check": "node scripts/sync-skill.mjs --check",
+    "prepack": "node scripts/sync-skill.mjs"
+  }
+}

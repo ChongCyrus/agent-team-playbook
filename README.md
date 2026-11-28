@@ -88,6 +88,34 @@ docs/workflow/review/      复盘日志
 docs/workflow/practices/   经验与做法库
 ```
 
+## 安装
+
+### 作为 DSH skill（推荐，只读、零侵入）
+
+```bash
+dsh plugin --profile web add dsh-agent-team-playbook
+```
+
+- 插件的**全部作用**是把本 playbook 挂成一个 skill（`agent-team-playbook`），让 agent 在需要时按需加载。
+- **不会写你任何文件**：skill 内容只读地放在包里，通过官方 `dsh-skill-filesystem` 提供器挂载。
+- 如果已有同名 skill，DSH 对同名 skill **不报错、只静默择优**——本插件会在启动时检测并在被其他来源遮蔽时给出 warn 提示。
+
+### 把 playbook 装进项目（可选，会写文件）
+
+```bash
+npx dsh-agent-team-playbook init --dry-run   # 先看计划
+npx dsh-agent-team-playbook init             # 交互式安装
+```
+
+冲突处理是本命令的核心设计：
+
+| 情况 | 行为 |
+|---|---|
+| 目标目录没有同名内容 | 直接安装 `AGENTS.md` + `docs/` |
+| 检测到冲突 | **逐个询问**：覆盖 / 改名 / 跳过 / 剩余全部覆盖 / 中止 |
+| 选了「改名」 | 写出的文件里对它的引用**同步改写**（如 `AGENTS.md` → `AGENTS.playbook.md`、`docs/` → `team-docs/`），不留断链 |
+| 管道 / CI（非交互） | **默认中止**，绝不静默覆盖；需显式 `--force` 或 `--skip-conflicts` |
+
 ## 快速开始
 
 1. 把 `AGENTS.md` 放到项目根目录（或与你的全局规则合并）
