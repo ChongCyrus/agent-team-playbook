@@ -1,18 +1,25 @@
 # dsh-agent-team-playbook —— DSH bundle patch
 #
-# 挂载本插件，注册只读命令 `/atp`：
-#   /atp          规程摘要 + 安装方式
-#   /atp core     核心全文（读完即在本轮遵循）
-#   /atp paths    分册绝对路径
-#   /atp help     用法
+# 挂载本插件，注册命令 /atp 与 Web 面板：
+#   /atp                 规程摘要 + 安装方式
+#   /atp core            核心全文（读完即在本轮遵循）
+#   /atp paths           分册绝对路径
+#   /atp install         把 playbook 原子安装进当前工作区（内容相同视为已安装）
+#   /atp install force   覆盖同名内容后安装（先暂存原件，失败回滚）
+#   /atp apply …         逐项决定冲突：覆盖 / 备份 / 改名
+#   /atp help            用法
 #
-# 本插件不写任何文件，也不挂载 skill：
-#   · 不挂 skill 是因为 skill 的目录摘要会常驻占用上下文（约 300 tokens/轮），
-#     而分册本来就不自动进上下文，用命令按需取更划算；
-#   · 要让规程成为每轮固定上下文，用 CLI：
-#       npx dsh-agent-team-playbook init                    # 项目级，写 AGENTS.md + docs/
-#       npx dsh-agent-team-playbook init --global           # 全局，受管区块（指针）
-#       npx dsh-agent-team-playbook init --global --inline-core  # 全局，内联核心全文
+# 写入边界：插件不主动改任何文件。只有显式执行 install/apply，或在 Web 面板
+# 点「安装 / 覆盖」时才写；每次都是「暂存 → 提交 → 失败回滚」的原子操作。
+#
+# 不挂 skill：skill 的目录摘要常驻上下文（约 300 tokens/轮），而分册本来就不自动
+# 进上下文，用命令按需取更划算。要让规程成为每轮固定上下文，用 CLI：
+#   npx dsh-agent-team-playbook init                          # 项目级：写 AGENTS.md + docs/
+#   npx dsh-agent-team-playbook init --global                 # 全局：受管区块（指针）
+#   npx dsh-agent-team-playbook init --global --inline-core   # 全局：内联核心全文
+#
+# Web / 桌面端附加：设置里的「协作规程」面板 + 首页 chip 下拉菜单 + 冲突处理弹窗。
+# 面板不新增写接口：点「应用」执行的就是一条 /atp apply 命令（与手打等价、有审计）。
 #
 # 安装：dsh plugin --profile web add dsh-agent-team-playbook
 # 本地开发：dsh plugin --profile web add link:<本目录绝对路径>
